@@ -4,6 +4,7 @@ import torch
 import pandas as pd
 from skimage import io, transform
 import numpy as np
+from PIL import Image
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
@@ -11,21 +12,19 @@ from tqdm import tqdm
 
 class dataSet(Dataset):
 
-    def __init__(self, meta_path, labels_path=False, transforms=False):
+    def __init__(self, meta_path, labels_path=False, transforms=None):
 
         self.train_image_dir = "ISIC_2019_Training_Input/"
         self.metadata = pd.read_csv(meta_path)
         self.file_names = os.listdir(self.train_image_dir)
         self.file_names.sort()
+        self.transforms = transforms
 
         if labels_path:
             self.labels = pd.read_csv(labels_path)
             self.classes = self.labels.columns[1:10].values
         else:
             self.labels = False
-        if transforms:
-            self.transforms = transforms
-
 
     def __len__(self):
         return len(self.metadata)
@@ -36,14 +35,15 @@ class dataSet(Dataset):
         file_name = self.file_names[index]
 
         full_path = os.path.join(self.train_image_dir, file_name)
-
         image = io.imread(full_path)
         label = self.get_class_name(self.labels.iloc[index].values)
 
         if self.transforms:
-            image = self.transforms(image)
+            data = self.transforms({'image': image, "label": label})
+        else:
+            data = {'image': image, "label": label}
 
-        return {'image': image, "label": label.item(0)}
+        return data
 
 
     def get_class_name(self, numbers):
@@ -106,13 +106,18 @@ class toTensor(object):
 
         image = image.transpose((2, 0, 1))
 
-        return {'image': torch.from_numpy(image),
-                'label': label}
+        return {'image': torch.from_numpy(image), 'label': label}
 
 
-class randomRotation:
-    def __init__(self, angles):
-        self.angles = angles
+class randomRotation(object):
+    def __init__(self, angle):
+        self.angles = angle
 
-    def __call__(self, x):
-        return transforms.functional.rotate(x, np.random.choice(self.angles))
+    def __call__(self, data):
+        image, label = data['image'], data['label']
+        image = Image.fromarray(image, 'RGB')
+        image = transforms.functional.rotate(image, np.random.choice(self.angles))
+        image = np.asarray(image)
+        return {'image': image, 'label': label}
+
+

@@ -10,14 +10,22 @@ import dataLoading
 import dataPlotting
 
 
-composed = transforms.Compose([dataLoading.reScale(1024),
-                               dataLoading.randomCrop(800)],
-                              dataLoading.randomRotation(90))
+dataPlot = dataPlotting.dataPlotting()
+composed = transforms.Compose([
+                                #dataLoading.randomRotation(90),
+                                dataLoading.reScale(1024),
+                                dataLoading.randomCrop(800),
+                                dataLoading.toTensor()
+                               ])
 
+train_data = dataLoading.dataSet("Training_meta_data/ISIC_2019_Training_Metadata.csv", "Training_meta_data/ISIC_2019_Training_GroundTruth.csv", transforms=composed)
 
+for i in range(len(train_data)):
+    data = train_data[i]
+    dataPlot.show_data(data)
 
-
-
+    if i == 3:
+        break
 
 
 

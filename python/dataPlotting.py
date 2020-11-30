@@ -12,8 +12,14 @@ from tqdm import tqdm
 class dataPlotting():
 
     def show_data(self, data):
+
+        image = data['image']
+        if torch.is_tensor(image):
+            trsfm = transforms.ToPILImage(mode='RGB')
+            image = trsfm(image)
+
         plt.figure()
         plt.axis('off')
-        plt.imshow(data['image'])
-        plt.title(data['label'] + " Sample")
+        plt.imshow(image)
+        plt.title(data['label'].item(0) + " Sample")
         plt.show()
