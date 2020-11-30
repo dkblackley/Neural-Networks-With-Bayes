@@ -109,3 +109,10 @@ class toTensor(object):
         return {'image': torch.from_numpy(image),
                 'label': label}
 
+
+class randomRotation:
+    def __init__(self, angles):
+        self.angles = angles
+
+    def __call__(self, x):
+        return transforms.functional.rotate(x, np.random.choice(self.angles))
