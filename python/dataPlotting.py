@@ -26,3 +26,15 @@ class dataPlotting():
         plt.imshow(image)
         plt.title(data['label'].item(0) + " Sample")
         plt.show()
+
+# Helper function to show a batch
+def show_batch(sample_batched):
+    images_batch, landmarks_batch = \
+        sample_batched['image'], sample_batched['label']
+    batch_size = len(images_batch)
+    im_size = images_batch.size(2)
+
+
+    plt.axis('off')
+    plt.ioff()
+    plt.show()
