@@ -34,7 +34,7 @@ class dataSet(Dataset):
 
         full_path = os.path.join(self.train_image_dir, file_name)
         image = Image.open(full_path)
-        label = self.get_class_name(self.labels.iloc[index].values)
+        label = self.get_class_name(self.labels.iloc[index].values)[0]
 
         if self.transforms:
             image = self.transforms(image)
@@ -45,7 +45,7 @@ class dataSet(Dataset):
 
     def get_class_name(self, numbers):
         index = np.where(numbers == 1.0)
-        return (self.classes[index[0] - 1])
+        return index[0] - 1
 
     def add_transforms(self, transforms):
         self.transforms = transforms

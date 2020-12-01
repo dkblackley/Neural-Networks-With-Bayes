@@ -8,11 +8,10 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from efficientnet_pytorch import EfficientNet
 
-
-
 import dataLoading
 import dataPlotting
 
+classes = ['MEL' 'NV' 'BCC' 'AK' 'BKL' 'DF' 'VASC' 'SCC' 'UNK']
 
 dataPlot = dataPlotting.dataPlotting()
 
@@ -33,7 +32,7 @@ train_set = torch.utils.data.DataLoader(train_data, batch_size=9, shuffle=True, 
 for i in range(len(train_data)):
     data = train_data[i]
     dataPlot.show_data(data)
-    print(i, data ['image'].size(), data ['label'])
+    print(i, data['image'].size(), data['label'])
     if i == 3:
         break
 
@@ -42,9 +41,10 @@ for i_batch, sample_batch in enumerate(train_set):
           sample_batch['label'].size())
 
     if i_batch == 3:
+        dataPlot.show_data(sample_batch[0])
         break
 
-#model = EfficientNet.from_pretrained('efficientnet-b0')
+
 
 
 

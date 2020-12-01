@@ -24,7 +24,7 @@ class dataPlotting():
         plt.figure()
         plt.axis('off')
         plt.imshow(image)
-        plt.title(data['label'].item(0) + " Sample")
+        plt.title(str(data['label'].item(0)) + " Sample")
         plt.show()
 
 # Helper function to show a batch
