@@ -15,8 +15,10 @@ class dataPlotting():
 
         image = data['image']
         if torch.is_tensor(image):
-            trsfm = transforms.ToPILImage(mode='RGB')
-            image = trsfm(image)
+            #trsfm = transforms.ToPILImage(mode='RGB')
+            #image = trsfm(image)
+            image = image.numpy()
+            image = image.transpose((2, 1, 0))
 
         plt.figure()
         plt.axis('off')

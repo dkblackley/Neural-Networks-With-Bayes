@@ -12,7 +12,7 @@ import dataPlotting
 
 dataPlot = dataPlotting.dataPlotting()
 composed = transforms.Compose([
-                                #dataLoading.randomRotation(90),
+                                dataLoading.randomRotation(90),
                                 dataLoading.reScale(1024),
                                 dataLoading.randomCrop(800),
                                 dataLoading.toTensor()
