@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 import os
 import torch
+
 import pandas as pd
 from skimage import io, transform
 import numpy as np
@@ -15,10 +16,10 @@ class dataPlotting():
 
         image = data['image']
         if torch.is_tensor(image):
-            #trsfm = transforms.ToPILImage(mode='RGB')
-            #image = trsfm(image)
-            image = image.numpy()
-            image = image.transpose((2, 1, 0))
+            trsfm = transforms.ToPILImage(mode='RGB')
+            image = trsfm(image)
+            #image = image.numpy()
+            #image = image.transpose((2, 1, 0))
 
         plt.figure()
         plt.axis('off')

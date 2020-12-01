@@ -5,10 +5,9 @@ import pandas as pd
 from skimage import io, transform
 import numpy as np
 from PIL import Image
-import matplotlib.pyplot as plt
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils
-from tqdm import tqdm
+import random
+from torch.utils.data import Dataset
+import torchvision.transforms.functional as TF
 
 class dataSet(Dataset):
 
@@ -31,49 +30,26 @@ class dataSet(Dataset):
 
     def __getitem__(self, index):
 
-        file_name = str(index)
         file_name = self.file_names[index]
 
         full_path = os.path.join(self.train_image_dir, file_name)
-        image = io.imread(full_path)
+        image = Image.open(full_path)
         label = self.get_class_name(self.labels.iloc[index].values)
 
         if self.transforms:
-            data = self.transforms({'image': image, "label": label})
-        else:
-            data = {'image': image, "label": label}
+            image = self.transforms(image)
+
+        data = {'image': image, "label": label}
 
         return data
-
 
     def get_class_name(self, numbers):
         index = np.where(numbers == 1.0)
         return (self.classes[index[0] - 1])
 
-class reScale(object):
+    def add_transforms(self, transforms):
+        self.transforms = transforms
 
-    def __init__(self, output_size):
-        assert isinstance(output_size, (int, tuple))
-        self.output_size = output_size
-
-    def __call__(self, data):
-
-        image, labels = data['image'], data['label']
-        height, width = image.shape[:2]
-
-        # If the user sent in a single int for size, i.e. a square image where width = height
-        if isinstance(self.output_size, int):
-            if height > width:
-                height, width = self.output_size * height / width, self.output_size
-            else:
-                height, width = self.output_size, self.output_size * width / height
-        else:
-            height, width = self.output_size
-
-        height, width = int(height), int(width)
-        image = transform.resize(image, (height, width))
-
-        return {'image': image, 'label': labels}
 
 
 class randomCrop(object):
@@ -86,8 +62,9 @@ class randomCrop(object):
             assert len(output_size) == 2
             self.output_size = output_size
 
-    def __call__(self, data):
-        image, label = data['image'], data['label']
+    def __call__(self, image):
+
+        image = np.asarray(image)
 
         height, width = image.shape[:2]
         new_height, new_width = self.output_size
@@ -97,27 +74,43 @@ class randomCrop(object):
 
         image = image[top: top + new_height, left: left + new_width]
 
-        return {'image': image, 'label': label}
+        image = Image.fromarray(image, 'RGB')
 
-class toTensor(object):
+        return image
 
-    def __call__(self, data):
-        image, label = data['image'], data['label']
-
-        image = image.transpose((2, 0, 1))
-
-        return {'image': torch.from_numpy(image), 'label': label}
 
 
 class randomRotation(object):
     def __init__(self, angle):
         self.angles = angle
 
+    def __call__(self, image):
+
+        image = TF.rotate(image, np.random.choice(self.angles))
+
+        return image
+"""
+class randomFlips(object):
+
     def __call__(self, data):
         image, label = data['image'], data['label']
-        image = Image.fromarray(image, 'RGB')
-        image = transforms.functional.rotate(image, np.random.choice(self.angles))
-        image = np.asarray(image)
+
+        if random.randint(1, 100) > 50:
+            image = TF.hflip(image)
+        if random.randint(1, 100) > 50:
+            image = TF.vflip(image)
         return {'image': image, 'label': label}
 
+# TODO Add in calculating mean and std
+class normalize(object):
+    def __init__(self, dataset, mean=False, std=False):
 
+        if mean and std:
+            self.mean = mean
+            self.std = std
+
+    def __call__(self, data):
+        image, label = data['image'], data['label']
+        image = TF.normalize(image, mean=self.mean, std=self.std)
+        return {'image': image, 'label': label}
+"""

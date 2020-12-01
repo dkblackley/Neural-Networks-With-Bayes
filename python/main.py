@@ -5,20 +5,27 @@ from torchvision import transforms
 import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+from PIL import Image
 
 import dataLoading
 import dataPlotting
 
 
 dataPlot = dataPlotting.dataPlotting()
+
+
 composed = transforms.Compose([
-                                dataLoading.randomRotation(90),
-                                dataLoading.reScale(1024),
+                                #dataLoading.randomRotation([0, 90, 180, 270]),
+                                transforms.RandomVerticalFlip(),
+                                transforms.RandomHorizontalFlip(),
+                                transforms.Resize((1024, 1024), Image.LANCZOS),
                                 dataLoading.randomCrop(800),
-                                dataLoading.toTensor()
+                                transforms.ToTensor(),
+                                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]) #TODO calculate mean and std
                                ])
 
 train_data = dataLoading.dataSet("Training_meta_data/ISIC_2019_Training_Metadata.csv", "Training_meta_data/ISIC_2019_Training_GroundTruth.csv", transforms=composed)
+
 
 for i in range(len(train_data)):
     data = train_data[i]
