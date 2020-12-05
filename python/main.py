@@ -10,9 +10,14 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 1
+EPOCHS = 3
 DEBUG = True
 ENABLE_GPU = False
+
+if ENABLE_GPU:
+    device = torch.device("cude:0")
+else:
+    device = torch.device("cpu")
 
 dataPlot = dataPlotting.dataPlotting()
 
@@ -35,6 +40,7 @@ test_data, train_data = random_split(train_data, [1331, 24000])
 train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True, num_workers=0)
 
 network = model.Classifier()
+network.to(device)
 
 optim = optimizer.Adam(network.parameters(), lr=0.001)
 loss_function = nn.CrossEntropyLoss()
@@ -62,10 +68,12 @@ def train():
     print("Training Network")
 
     for epoch in range(EPOCHS):
-        print(f"Epoch {epoch + 1} of {EPOCHS}:\n")
+        print(f"\nEpoch {epoch + 1} of {EPOCHS}:")
         for i_batch, sample_batch in enumerate(tqdm(train_set)):
             image_batch = sample_batch['image']
             label_batch = sample_batch['label']
+
+            image_batch, label_batch = image_batch.to(device), label_batch.to(device)
 
             optim.zero_grad()
             outputs = network(image_batch, dropout=True)
@@ -73,10 +81,12 @@ def train():
             loss.backward()
             optim.step()
 
-            if i_batch % 50 == 0:
-                if DEBUG is True and i_batch == 50:
-                    break
+            if DEBUG and i_batch % 50 == 49:
                 print(loss)
+                if i_batch == 50:
+                    break
+        print(f"loss: {loss}")
+
 
 
 def test():
