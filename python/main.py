@@ -2,16 +2,11 @@ import torch
 import torchvision
 import torch.optim as optimizer
 from torchvision import transforms
-import torch.nn as nn
-import torch.nn.functional as F
-import matplotlib.pyplot as plt
 from PIL import Image
-from efficientnet_pytorch import EfficientNet
-
 import dataLoading
 import dataPlotting
 
-classes = ['MEL' 'NV' 'BCC' 'AK' 'BKL' 'DF' 'VASC' 'SCC' 'UNK']
+LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 
 dataPlot = dataPlotting.dataPlotting()
 
@@ -29,20 +24,20 @@ composed = transforms.Compose([
 train_data = dataLoading.dataSet("Training_meta_data/ISIC_2019_Training_Metadata.csv", "Training_meta_data/ISIC_2019_Training_GroundTruth.csv", transforms=composed)
 train_set = torch.utils.data.DataLoader(train_data, batch_size=9, shuffle=True, num_workers=0)
 
-for i in range(len(train_data)):
-    data = train_data[i]
-    dataPlot.show_data(data)
-    print(i, data['image'].size(), data['label'])
-    if i == 3:
-        break
 
-for i_batch, sample_batch in enumerate(train_set):
-    print(i_batch, sample_batch['image'].size(),
-          sample_batch['label'].size())
 
-    if i_batch == 3:
-        dataPlot.show_data(sample_batch[0])
-        break
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -52,6 +47,24 @@ for i_batch, sample_batch in enumerate(train_set):
 
 
 """
+for i in range(len(train_data)):
+    data = train_data[i]
+    dataPlot.show_data(data)
+    print(i, data['image'].size(), LABELS[data['label']])
+    if i == 3:
+        break
+
+
+
+for i_batch, sample_batch in enumerate(train_set):
+    print(i_batch, sample_batch['image'].size(),
+          sample_batch['label'].size())
+
+    if i_batch == 3:
+        dataPlot.show_batch(sample_batch, 3)
+        break
+
+
 
 dataPlot = dataPlotting.dataPlotting()
 scale = dataLoading.reScale(1024)
