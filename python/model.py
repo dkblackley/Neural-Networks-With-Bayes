@@ -11,18 +11,18 @@ class Classifier(nn.Module):
 
         super(Classifier, self).__init__()
         self.model = EfficientNet.from_name("efficientnet-b0")
-        self.dropout = dropout
+        self.drop_rate = dropout
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.output_layer = nn.Linear(1280, 9)
 
-    def forward(self, input):
+    def forward(self, input, dropout=False):
 
         output = self.model.extract_features(input)
         output = self.pool(output)
         output = output.view(output.shape[0], -1)
 
-        if self.dropout:
-            output = TF.dropout(output, self.dropout)
+        if dropout:
+            output = TF.dropout(output, self.drop_rate)
 
         output = self.output_layer(output)
         return TF.log_softmax(output, dim=1)
