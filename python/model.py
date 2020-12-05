@@ -4,6 +4,7 @@ from torch.nn import functional as TF
 from efficientnet_pytorch import EfficientNet
 
 
+
 class Classifier(nn.Module):
 
     def __init__(self, dropout=0.5):
@@ -14,7 +15,7 @@ class Classifier(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.output_layer = nn.Linear(1280, 9)
 
-    def forwad(self, input):
+    def forward(self, input):
 
         output = self.model.extract_features(input)
         output = self.pool(output)
@@ -24,4 +25,4 @@ class Classifier(nn.Module):
             output = TF.dropout(output, self.dropout)
 
         output = self.output_layer(output)
-        return output
+        return TF.log_softmax(output, dim=1)

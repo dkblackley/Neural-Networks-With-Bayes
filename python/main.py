@@ -1,12 +1,15 @@
 import torch
-import torchvision
 import torch.optim as optimizer
 from torchvision import transforms
 from PIL import Image
 import dataLoading
 import dataPlotting
+import model
+import torch.nn as nn
+from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
+EPOCHS = 1
 
 dataPlot = dataPlotting.dataPlotting()
 
@@ -22,16 +25,29 @@ composed = transforms.Compose([
                                ])
 
 train_data = dataLoading.dataSet("Training_meta_data/ISIC_2019_Training_Metadata.csv", "Training_meta_data/ISIC_2019_Training_GroundTruth.csv", transforms=composed)
-train_set = torch.utils.data.DataLoader(train_data, batch_size=9, shuffle=True, num_workers=0)
+train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True, num_workers=0)
 
 
+network = model.Classifier()
 
+optim = optimizer.Adam(network.parameters(), lr=0.001)
+loss_function = nn.CrossEntropyLoss()
 
+print("Training Network")
 
+for epoch in range(EPOCHS):
+    print(f"Epoch {epoch} of {EPOCHS}:")
+    for i_batch, sample_batch in enumerate(tqdm(train_set)):
+        image_batch = sample_batch['image']
+        label_batch = sample_batch['label']
 
+        optim.zero_grad()
+        outputs = network(image_batch)
+        loss = loss_function(outputs, label_batch)
+        loss.backward()
+        optim.step()
 
-
-
+print(loss)
 
 
 
