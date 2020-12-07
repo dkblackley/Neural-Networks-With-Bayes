@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 EPOCHS = 3
-DEBUG = True
+DEBUG = False
 ENABLE_GPU = False
 
 if ENABLE_GPU:
@@ -33,17 +33,29 @@ composed = transforms.Compose([
                                ])
 
 train_data = dataLoading.dataSet("Training_meta_data/ISIC_2019_Training_Metadata.csv", "Training_meta_data/ISIC_2019_Training_GroundTruth.csv", transforms=composed)
+
+#train_data.count_classes()
+
+
 # make an improptu test set
 test_data, train_data = random_split(train_data, [1331, 24000])
 
 
 train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True, num_workers=0)
 
+
+
+
 network = model.Classifier()
 network.to(device)
 
 optim = optimizer.Adam(network.parameters(), lr=0.001)
-loss_function = nn.CrossEntropyLoss()
+
+total = len(train_data)
+weights = [(total / 4522), (total / 12875), (total / 3323), (total / 867), (total / 2624), (total / 239), (total / 253), (total / 628), 0.0]
+
+class_weights = torch.FloatTensor(weights).to(device)
+loss_function = nn.CrossEntropyLoss(weight=class_weights)
 
 
 def plot_samples():
@@ -64,6 +76,7 @@ def plot_samples():
             break
 
 
+
 def train():
     print("Training Network")
 
@@ -81,11 +94,12 @@ def train():
             loss.backward()
             optim.step()
 
-            if DEBUG and i_batch % 50 == 49:
+            if i_batch == 20 and DEBUG:
                 print(loss)
-                if i_batch == 50:
-                    break
+                break
         print(f"loss: {loss}")
+        if DEBUG:
+            break
 
 
 
@@ -93,6 +107,9 @@ def test():
 
     correct = 0
     total = 0
+    incorrect = 0
+    correct_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
+    incorrect_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
 
     print("\nTesting Data...")
     with torch.no_grad():
@@ -104,12 +121,27 @@ def test():
             output = torch.argmax(network(image[None, ...]))
 
             if output == real_label:
+                label = LABELS[output.item()]
+                correct_count[label] += 1
                 correct += 1
+            else:
+                label = LABELS[output.item()]
+                incorrect_count[label] += 1
+                incorrect += 1
             total += 1
 
     print(f"\nCorrect = {correct}")
     print(f"Total = {total}")
     print(f"Accuracy = {(correct / total) * 100}%")
+
+    print("\n Correct Predictions: ")
+    for label, count in correct_count.items():
+        print(f"{label}: {count / correct * 100}%")
+
+    print("\n Incorrect Predictions: ")
+    for label, count in incorrect_count.items():
+        print(f"{label}: {count / incorrect * 100}%")
+
 
 
 train()

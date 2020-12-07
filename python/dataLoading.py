@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 import torchvision.transforms.functional as TF
+from tqdm import tqdm
 
 class dataSet(Dataset):
 
@@ -39,6 +40,29 @@ class dataSet(Dataset):
         data = {'image': image, "label": label}
 
         return data
+
+    def count_classes(self):
+
+        LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
+        labels_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
+        print("Counting labels")
+        for index in tqdm(range(len(self))):
+
+            label = self.get_class_name(self.labels.iloc[index].values)[0]
+            label = LABELS[label]
+            try:
+                labels_count[label] += 1
+            except Exception as e:
+                continue
+
+        print(labels_count)
+
+        for label, count in labels_count.items():
+            print(f"{label}: {count/len(self) * 100}%")
+
+        return labels_count
+
+
 
     def get_class_name(self, numbers):
         index = np.where(numbers == 1.0)
@@ -86,28 +110,3 @@ class randomRotation(object):
         image = TF.rotate(image, np.random.choice(self.angles))
 
         return image
-"""
-class randomFlips(object):
-
-    def __call__(self, data):
-        image, label = data['image'], data['label']
-
-        if random.randint(1, 100) > 50:
-            image = TF.hflip(image)
-        if random.randint(1, 100) > 50:
-            image = TF.vflip(image)
-        return {'image': image, 'label': label}
-
-# TODO Add in calculating mean and std
-class normalize(object):
-    def __init__(self, dataset, mean=False, std=False):
-
-        if mean and std:
-            self.mean = mean
-            self.std = std
-
-    def __call__(self, data):
-        image, label = data['image'], data['label']
-        image = TF.normalize(image, mean=self.mean, std=self.std)
-        return {'image': image, 'label': label}
-"""
