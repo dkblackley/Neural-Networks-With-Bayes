@@ -11,11 +11,11 @@ from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 EPOCHS = 3
-DEBUG = False
+DEBUG = True
 ENABLE_GPU = False
 
 if ENABLE_GPU:
-    device = torch.device("cude:0")
+    device = torch.device("cuda:0")
 else:
     device = torch.device("cpu")
 
@@ -52,7 +52,7 @@ network.to(device)
 optim = optimizer.Adam(network.parameters(), lr=0.001)
 
 total = len(train_data)
-weights = [(total / 4522), (total / 12875), (total / 3323), (total / 867), (total / 2624), (total / 239), (total / 253), (total / 628), 0.0]
+weights = [(total / (4522)), (total / (12875 * 1.2)), (total / (3323)), (total / (867)), (total / (2624)), (total / (239)), (total / (253)), (total / (628)), 0.0]
 
 class_weights = torch.FloatTensor(weights).to(device)
 loss_function = nn.CrossEntropyLoss(weight=class_weights)
@@ -94,7 +94,7 @@ def train():
             loss.backward()
             optim.step()
 
-            if i_batch == 20 and DEBUG:
+            if i_batch == 30 and DEBUG:
                 print(loss)
                 break
         print(f"loss: {loss}")
