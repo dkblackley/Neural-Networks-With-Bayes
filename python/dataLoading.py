@@ -24,7 +24,7 @@ class dataSet(Dataset):
             self.labels = False
 
     def __len__(self):
-        return len(self.metadata)
+        return len(self.file_names)
 
     def __getitem__(self, index):
 
@@ -61,6 +61,40 @@ class dataSet(Dataset):
             print(f"{label}: {count/len(self) * 100}%")
 
         return labels_count
+
+    # set NV to only have 4522 and remove everything that isn't MEL or NV
+    def make_equal(self):
+
+        print("Deleting Labels.")
+        deleted = 0
+        NV_count = 0
+
+        for index in tqdm(range(len(self))):
+            # if the file has already been deleted
+
+            index = index - deleted
+
+            try:
+                label_index = self.get_class_name(self.labels.iloc[index].values)[0]
+            except Exception as e:
+                print(self.labels)
+                continue
+
+            if label_index >= 2:
+                self.file_names.remove(self.labels.iloc[index].values[0] + '.jpg')
+                self.labels = self.labels.drop(index)
+                deleted += 1
+                self.labels = self.labels.reset_index(drop=True)
+
+            elif label_index == 1 and NV_count >= 4522:
+                self.file_names.remove(self.labels.iloc[index].values[0] + '.jpg')
+                self.labels = self.labels.drop(index)
+                deleted += 1
+                self.labels = self.labels.reset_index(drop=True)
+
+            elif label_index == 1:
+                NV_count += 1
+
 
 
 

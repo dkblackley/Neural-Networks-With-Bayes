@@ -2,15 +2,16 @@ import torch
 import torch.optim as optimizer
 from torchvision import transforms
 from PIL import Image
-from torch.utils.data import random_split
+from torch.utils.data import random_split, WeightedRandomSampler
 import dataLoading
 import dataPlotting
 import model
 import torch.nn as nn
+import numpy as np
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 3
+EPOCHS = 1
 DEBUG = True
 ENABLE_GPU = False
 
@@ -35,13 +36,15 @@ composed = transforms.Compose([
 train_data = dataLoading.dataSet("Training_meta_data/ISIC_2019_Training_Metadata.csv", "Training_meta_data/ISIC_2019_Training_GroundTruth.csv", transforms=composed)
 
 #train_data.count_classes()
-
+train_data.make_equal()
+train_data.make_equal()
+train_data.count_classes()
 
 # make an improptu test set
-test_data, train_data = random_split(train_data, [1331, 24000])
+test_data, train_data = random_split(train_data, [244, 8800])
 
 
-train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True, num_workers=0)
+train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True)
 
 
 
@@ -51,11 +54,21 @@ network.to(device)
 
 optim = optimizer.Adam(network.parameters(), lr=0.001)
 
-total = len(train_data)
-weights = [(total / (4522)), (total / (12875 * 1.2)), (total / (3323)), (total / (867)), (total / (2624)), (total / (239)), (total / (253)), (total / (628)), 0.0]
+total = len(train_data) - 1331
+#weights = [(total / (4522)), (total / (12875)), (total / (3323)), (total / (867)), (total / (2624)), (total / (239)), (total / (253)), (total / (628))]
+#weights = [((4522) / total), ((12875) / total), ((3323) / total), ((867) / total), ((2624) / total), ((239) / total), ((253) / total), ((628) / total), 0.0]
+#weights = [(1 / (4522)), (1 / (12875)), (1 / (3323)), (1 / (867)), (1 / (2624)), (1 / (239)), (1 / (253)), (1 / (628))]
+#weights = [(1 - (4522) / total), (1 - (12875) / total), (1 - (3323) / total), (1 - (867) / total), (1 - (2624) / total), (1 - (239) / total), (1 - (253) / total), (1 - (628) / total), 0.0]
+#weights = [1/1002, 1/6034, 1/990, 1/295, 1/462, 1/104, 1/104, 1/128, 0]
+#weights = np.multiply(6034, weights)
+#weights = 1.0 / torch.Tensor([4522, 12875, 3323, 867, 2624, 239, 253, 628])
+weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
 
+#class_weights = [1 - (x / sum(weights)) for x in weights]
 class_weights = torch.FloatTensor(weights).to(device)
-loss_function = nn.CrossEntropyLoss(weight=class_weights)
+#class_weights = torch.tensor(np.multiply(6034, lossWeights), dtype = dtype)
+#loss_function = nn.CrossEntropyLoss(weight=class_weights)
+loss_function = nn.CrossEntropyLoss()
 
 
 def plot_samples():
@@ -97,6 +110,8 @@ def train():
             if i_batch == 30 and DEBUG:
                 print(loss)
                 break
+            if i_batch % 50 == 0:
+                print(loss)
         print(f"loss: {loss}")
         if DEBUG:
             break
