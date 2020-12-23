@@ -57,3 +57,10 @@ class dataPlotting():
         plt.xlabel("Epoch")
         plt.ylabel("Loss value")
         plt.show()
+
+    def plot_validation(self, results, epochs):
+        plt.plot(results, epochs)
+        plt.title("Accuracy over time")
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.show()

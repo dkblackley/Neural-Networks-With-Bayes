@@ -13,7 +13,7 @@ from tqdm import tqdm
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 EPOCHS = 3
 DEBUG = False
-ENABLE_GPU = True
+ENABLE_GPU = False
 
 if ENABLE_GPU:
     device = torch.device("cuda:0")
@@ -40,7 +40,7 @@ train_data.make_equal()
 train_data.count_classes()
 
 # make an improptu test set
-test_data, train_data = random_split(train_data, [244, 8800])
+val_data, train_data = random_split(train_data, [244, 8800])
 
 
 train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True)
@@ -92,12 +92,13 @@ def plot_samples():
 def train():
     print("Training Network")
 
-    average_losses = []
     intervals = []
+    average_losses = []
+    average_accuracy = []
 
     for epoch in range(EPOCHS):
-        interval = 10
         losses = []
+        interval = 10
         print(f"\nEpoch {epoch + 1} of {EPOCHS}:")
         for i_batch, sample_batch in enumerate(tqdm(train_set)):
             image_batch = sample_batch['image']
@@ -113,25 +114,24 @@ def train():
 
             percentage = (i_batch/len(train_set)) * 100
 
-            losses.append(loss.item())
-
             if percentage >= 30 and DEBUG:
                 print(loss)
                 break
-            """if percentage >= interval:
-                interval += 10
-                print(loss)
-                losses.append(loss.item())
-                intervals.append((interval / 100) + epoch)"""
-        average_losses = (sum(losses) / i_batch)
-        print(f"loss: {loss}")
+
+        intervals.append(epoch)
+        average_losses.append(sum(losses) / i_batch)
+        print(f"\nloss: {loss}")
+
+        accuracy = test(val_data)
+        average_accuracy.append(accuracy)
+
         if DEBUG:
-            return losses, intervals
-    return average_losses, intervals
+            return average_losses, intervals, average_accuracy
+    return average_losses, intervals, average_accuracy
 
 
 
-def test():
+def test(test_data):
 
     correct = 0
     total = 0
@@ -143,7 +143,7 @@ def test():
     with torch.no_grad():
         for i in tqdm(range(len(test_data))):
             data = test_data[i]
-            image = data['image']
+            image = data['image'].to(device)
             real_label = data['label']
 
             output = torch.argmax(network(image[None, ...]))
@@ -159,8 +159,8 @@ def test():
             total += 1
 
     print(f"\nCorrect = {correct}")
-    print(f"Total = {total}")
-    print(f"Accuracy = {(correct / total) * 100}%")
+    print(f"Total = {len(test_data)}")
+    print(f"Accuracy = {(correct / len(test_data)) * 100}%")
 
     print("\n Correct Predictions: ")
     for label, count in correct_count.items():
@@ -170,10 +170,25 @@ def test():
     for label, count in incorrect_count.items():
         print(f"{label}: {count / incorrect * 100}%")
 
+    print(f"\nCorrect = {correct}")
+    print(f"Total = {len(test_data)}")
+    accuracy = (correct / len(test_data)) * 100
+    print(f"Accuracy = {accuracy}%")
+
+    print("\n Correct Predictions: ")
+    for label, count in correct_count.items():
+        print(f"{label}: {count / correct * 100}%")
+
+    print("\n Incorrect Predictions: ")
+    for label, count in incorrect_count.items():
+        print(f"{label}: {count / incorrect * 100}%")
+    return accuracy
 
 
-losses, intervals = train()
+
+losses, intervals, accuracies = train()
 dataPlot.plot_loss(losses, intervals)
-test()
+dataPlot.plot_validation(accuracies, intervals)
+#test()
 
 
