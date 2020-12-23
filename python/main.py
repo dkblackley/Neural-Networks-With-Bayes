@@ -11,9 +11,9 @@ import numpy as np
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 1
-DEBUG = True
-ENABLE_GPU = False
+EPOCHS = 3
+DEBUG = False
+ENABLE_GPU = True
 
 if ENABLE_GPU:
     device = torch.device("cuda:0")
@@ -36,7 +36,6 @@ composed = transforms.Compose([
 train_data = dataLoading.dataSet("Training_meta_data/ISIC_2019_Training_Metadata.csv", "Training_meta_data/ISIC_2019_Training_GroundTruth.csv", transforms=composed)
 
 #train_data.count_classes()
-train_data.make_equal()
 train_data.make_equal()
 train_data.count_classes()
 
@@ -93,7 +92,12 @@ def plot_samples():
 def train():
     print("Training Network")
 
+    average_losses = []
+    intervals = []
+
     for epoch in range(EPOCHS):
+        interval = 10
+        losses = []
         print(f"\nEpoch {epoch + 1} of {EPOCHS}:")
         for i_batch, sample_batch in enumerate(tqdm(train_set)):
             image_batch = sample_batch['image']
@@ -107,14 +111,23 @@ def train():
             loss.backward()
             optim.step()
 
-            if i_batch == 30 and DEBUG:
+            percentage = (i_batch/len(train_set)) * 100
+
+            losses.append(loss.item())
+
+            if percentage >= 30 and DEBUG:
                 print(loss)
                 break
-            if i_batch % 50 == 0:
+            """if percentage >= interval:
+                interval += 10
                 print(loss)
+                losses.append(loss.item())
+                intervals.append((interval / 100) + epoch)"""
+        average_losses = (sum(losses) / i_batch)
         print(f"loss: {loss}")
         if DEBUG:
-            break
+            return losses, intervals
+    return average_losses, intervals
 
 
 
@@ -159,7 +172,8 @@ def test():
 
 
 
-train()
+losses, intervals = train()
+dataPlot.plot_loss(losses, intervals)
 test()
 
 

@@ -50,3 +50,10 @@ class dataPlotting():
 
         plt.ioff()
         plt.show()
+
+    def plot_loss(self, loss_values, loss_cycle):
+        plt.plot(loss_cycle, loss_values)
+        plt.title("Loss over time")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss value")
+        plt.show()

@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
-import torchvision.transforms.functional as TF
+import torchvision.transforms.functional as TrsF
 from tqdm import tqdm
 
 class dataSet(Dataset):
@@ -12,7 +12,7 @@ class dataSet(Dataset):
     def __init__(self, meta_path, labels_path=False, transforms=None):
 
         self.train_image_dir = "ISIC_2019_Training_Input/"
-        self.metadata = pd.read_csv(meta_path)
+        #self.metadata = pd.read_csv(meta_path)
         self.file_names = os.listdir(self.train_image_dir)
         self.file_names.sort()
         self.transforms = transforms
@@ -141,6 +141,6 @@ class randomRotation(object):
 
     def __call__(self, image):
 
-        image = TF.rotate(image, np.random.choice(self.angles))
+        image = TrsF.rotate(image, np.random.choice(self.angles))
 
         return image
