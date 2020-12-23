@@ -160,18 +160,6 @@ def test(test_data):
 
     print(f"\nCorrect = {correct}")
     print(f"Total = {len(test_data)}")
-    print(f"Accuracy = {(correct / len(test_data)) * 100}%")
-
-    print("\n Correct Predictions: ")
-    for label, count in correct_count.items():
-        print(f"{label}: {count / correct * 100}%")
-
-    print("\n Incorrect Predictions: ")
-    for label, count in incorrect_count.items():
-        print(f"{label}: {count / incorrect * 100}%")
-
-    print(f"\nCorrect = {correct}")
-    print(f"Total = {len(test_data)}")
     accuracy = (correct / len(test_data)) * 100
     print(f"Accuracy = {accuracy}%")
 
@@ -182,6 +170,7 @@ def test(test_data):
     print("\n Incorrect Predictions: ")
     for label, count in incorrect_count.items():
         print(f"{label}: {count / incorrect * 100}%")
+
     return accuracy
 
 
