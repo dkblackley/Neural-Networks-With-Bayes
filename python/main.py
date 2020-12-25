@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 EPOCHS = 3
-DEBUG = False
+DEBUG = True
 ENABLE_GPU = False
 
 if ENABLE_GPU:
@@ -33,7 +33,7 @@ composed = transforms.Compose([
                                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]) #TODO calculate mean and std
                                ])
 
-train_data = dataLoading.dataSet("Training_meta_data/ISIC_2019_Training_Metadata.csv", "Training_meta_data/ISIC_2019_Training_GroundTruth.csv", transforms=composed)
+train_data = dataLoading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed)
 
 #train_data.count_classes()
 train_data.make_equal()
@@ -44,6 +44,7 @@ val_data, train_data = random_split(train_data, [244, 8800])
 
 
 train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True)
+val_set = torch.utils.data.DataLoader(val_data, batch_size=30, shuffle=True)
 
 
 
@@ -93,8 +94,10 @@ def train():
     print("Training Network")
 
     intervals = []
-    average_losses = []
-    average_accuracy = []
+    val_losses = []
+    train_losses = []
+    val_accuracy = []
+    train_accuracy = []
 
     for epoch in range(EPOCHS):
         losses = []
@@ -114,39 +117,75 @@ def train():
 
             percentage = (i_batch/len(train_set)) * 100
 
-            if percentage >= 30 and DEBUG:
+            losses.append(loss.item())
+
+            if percentage >= 10 and DEBUG:
                 print(loss)
                 break
 
-        intervals.append(epoch)
-        average_losses.append(sum(losses) / i_batch)
+        intervals.append(epoch + 1)
+        train_losses.append(sum(losses) / len(losses))
         print(f"\nloss: {loss}")
 
-        accuracy = test(val_data)
-        average_accuracy.append(accuracy)
+        accuracy, val_loss = test(val_set)
+        val_losses.append(val_loss)
+        val_accuracy.append(accuracy)
+
+        accuracy = test(train_set)
+        train_accuracy.append(accuracy)
 
         if DEBUG:
-            return average_losses, intervals, average_accuracy
-    return average_losses, intervals, average_accuracy
+            return intervals, val_losses, train_losses, val_accuracy, train_accuracy
+    return intervals, val_losses, train_losses, val_accuracy, train_accuracy
 
 
-
-def test(test_data):
-
+def test(testing_set):
     correct = 0
     total = 0
     incorrect = 0
     correct_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
     incorrect_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
+    average_losses = []
+    losses = []
 
     print("\nTesting Data...")
     with torch.no_grad():
-        for i in tqdm(range(len(test_data))):
+        for i_batch, sample_batch in enumerate(tqdm(testing_set)):
+            image_batch = sample_batch['image']
+            label_batch = sample_batch['label']
+
+            image_batch, label_batch = image_batch.to(device), label_batch
+
+            outputs = network(image_batch, dropout=False)
+            loss = loss_function(outputs, label_batch)
+
+
+            losses.append(loss.item())
+            index = 0
+
+            for output in outputs:
+                answer = torch.argmax(output)
+                real_answer = label_batch[index]
+
+                if answer == real_answer:
+                    label = LABELS[real_answer.item()]
+                    correct_count[label] += 1
+                    correct += 1
+                else:
+                    label = LABELS[real_answer.item()]
+                    incorrect_count[label] += 1
+                    incorrect += 1
+                total += 1
+
+            """  for i in tqdm(range(len(test_data))):
             data = test_data[i]
             image = data['image'].to(device)
             real_label = data['label']
 
             output = torch.argmax(network(image[None, ...]))
+
+            loss = loss_function(output, real_label)
+            losses.append(loss.item())
 
             if output == real_label:
                 label = LABELS[output.item()]
@@ -156,11 +195,11 @@ def test(test_data):
                 label = LABELS[output.item()]
                 incorrect_count[label] += 1
                 incorrect += 1
-            total += 1
+            total += 1"""
 
     print(f"\nCorrect = {correct}")
-    print(f"Total = {len(test_data)}")
-    accuracy = (correct / len(test_data)) * 100
+    print(f"Total = {total}")
+    accuracy = (correct / total) * 100
     print(f"Accuracy = {accuracy}%")
 
     print("\n Correct Predictions: ")
@@ -171,13 +210,14 @@ def test(test_data):
     for label, count in incorrect_count.items():
         print(f"{label}: {count / incorrect * 100}%")
 
-    return accuracy
+    average_loss = (sum(losses) / len(losses))
+
+    return accuracy, average_loss
 
 
 
-losses, intervals, accuracies = train()
-dataPlot.plot_loss(losses, intervals)
-dataPlot.plot_validation(accuracies, intervals)
-#test()
+intervals, val_losses, train_losses, val_accuracies, train_accuracies = train()
 
+dataPlot.plot_loss(intervals, val_losses, train_losses)
+dataPlot.plot_validation(intervals, val_accuracies, train_accuracies)
 
