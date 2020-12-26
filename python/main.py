@@ -5,9 +5,9 @@ from PIL import Image
 from torch.utils.data import random_split, WeightedRandomSampler
 import dataLoading
 import dataPlotting
+import helper
 import model
 import torch.nn as nn
-import numpy as np
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
@@ -24,22 +24,25 @@ dataPlot = dataPlotting.dataPlotting()
 
 
 composed = transforms.Compose([
-                                #dataLoading.randomRotation([0, 90, 180, 270]),
                                 transforms.RandomVerticalFlip(),
                                 transforms.RandomHorizontalFlip(),
                                 transforms.Resize((256, 256), Image.LANCZOS),
                                 dataLoading.randomCrop(224),
                                 transforms.ToTensor(),
-                                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]) #TODO calculate mean and std
+                                transforms.Normalize(mean=[0.3630, 0.0702, 0.0546], std=[0.3992, 0.3802, 0.4071]) #TODO calculate mean and std
                                ])
 
 train_data = dataLoading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed)
+
+train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True)
+helper.get_mean_and_std(train_set)
 
 # Make a binary classifier initially
 #train_data.make_equal()
 weights = list(train_data.count_classes().values())
 weights.pop()
 total = len(train_data)
+
 
 # make a validation set
 val_data, train_data = random_split(train_data, [331, 25000])
@@ -70,32 +73,6 @@ class_weights = torch.FloatTensor(weights).to(device)
 #loss_function = nn.CrossEntropyLoss(weight=class_weights)
 loss_function = nn.CrossEntropyLoss(weight=class_weights)
 
-
-def plot_samples():
-
-    for i in range(len(train_data)):
-        data = train_data[i]
-        dataPlot.show_data(data)
-        print(i, data['image'].size(), LABELS[data['label']])
-        if i == 3:
-            break
-
-    for i_batch, sample_batch in enumerate(train_set):
-        print(i_batch, sample_batch['image'].size(),
-              sample_batch['label'].size())
-
-        if i_batch == 3:
-            dataPlot.show_batch(sample_batch, 3)
-            break
-
-def save_net(network, PATH):
-    torch.save(network.state_dict(), PATH)
-
-def load_net(PATH):
-    net = model.Classifier()
-    net.load_state_dict(torch.load(PATH))
-    net.eval()
-    return net.to(device)
 
 
 def train(verboose=False):
