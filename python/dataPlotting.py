@@ -51,16 +51,20 @@ class dataPlotting():
         plt.ioff()
         plt.show()
 
-    def plot_loss(self, loss_values, loss_cycle):
-        plt.plot(loss_cycle, loss_values)
+    def plot_loss(self, loss_cycle, loss_values_val, loss_values_test):
+        plt.plot(loss_cycle, loss_values_test, label="Training set")
+        plt.plot(loss_cycle, loss_values_val, label="Validation set")
         plt.title("Loss over time")
         plt.xlabel("Epoch")
         plt.ylabel("Loss value")
+        plt.legend(loc='best')
         plt.show()
 
-    def plot_validation(self, results, epochs):
-        plt.plot(results, epochs)
+    def plot_validation(self, epochs, results_val, results_test):
+        plt.plot(epochs, results_test, label="Training set")
+        plt.plot(epochs, results_val, label="Validation set")
         plt.title("Accuracy over time")
         plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
+        plt.ylabel("Accuracy (%)")
+        plt.legend(loc='best')
         plt.show()
