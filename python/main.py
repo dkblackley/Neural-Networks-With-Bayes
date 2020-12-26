@@ -36,11 +36,14 @@ composed = transforms.Compose([
 train_data = dataLoading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed)
 
 # Make a binary classifier initially
-train_data.make_equal()
-train_data.count_classes()
+#train_data.make_equal()
+weights = list(train_data.count_classes().values())
+weights.pop()
+total = len(train_data)
 
 # make a validation set
-val_data, train_data = random_split(train_data, [244, 8800])
+val_data, train_data = random_split(train_data, [331, 25000])
+
 
 
 train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True)
@@ -52,7 +55,6 @@ network.to(device)
 
 optim = optimizer.Adam(network.parameters(), lr=0.001)
 
-total = len(train_data) - 1331
 #weights = [(total / (4522)), (total / (12875)), (total / (3323)), (total / (867)), (total / (2624)), (total / (239)), (total / (253)), (total / (628))]
 #weights = [((4522) / total), ((12875) / total), ((3323) / total), ((867) / total), ((2624) / total), ((239) / total), ((253) / total), ((628) / total), 0.0]
 #weights = [(1 / (4522)), (1 / (12875)), (1 / (3323)), (1 / (867)), (1 / (2624)), (1 / (239)), (1 / (253)), (1 / (628))]
@@ -60,13 +62,13 @@ total = len(train_data) - 1331
 #weights = [1/1002, 1/6034, 1/990, 1/295, 1/462, 1/104, 1/104, 1/128, 0]
 #weights = np.multiply(6034, weights)
 #weights = 1.0 / torch.Tensor([4522, 12875, 3323, 867, 2624, 239, 253, 628])
-weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
+#weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
 
 #class_weights = [1 - (x / sum(weights)) for x in weights]
 class_weights = torch.FloatTensor(weights).to(device)
 #class_weights = torch.tensor(np.multiply(6034, lossWeights), dtype = dtype)
 #loss_function = nn.CrossEntropyLoss(weight=class_weights)
-loss_function = nn.CrossEntropyLoss()
+loss_function = nn.CrossEntropyLoss(weight=class_weights)
 
 
 def plot_samples():
@@ -179,8 +181,8 @@ def train(verboose=False):
         val_losses.append(val_loss)
         val_accuracy.append(accuracy)
 
-        if DEBUG:
-            return intervals, val_losses, train_losses, val_accuracy, train_accuracy
+        #if DEBUG:
+        #    return intervals, val_losses, train_losses, val_accuracy, train_accuracy
     return intervals, val_losses, train_losses, val_accuracy, train_accuracy
 
 
@@ -250,10 +252,5 @@ intervals, val_losses, train_losses, val_accuracies, train_accuracies = train(ve
 
 dataPlot.plot_loss(intervals, val_losses, train_losses)
 dataPlot.plot_validation(intervals, val_accuracies, train_accuracies)
-#test()
 
-intervals, val_losses, train_losses, val_accuracies, train_accuracies = train()
-
-dataPlot.plot_loss(intervals, val_losses, train_losses)
-dataPlot.plot_validation(intervals, val_accuracies, train_accuracies)
 

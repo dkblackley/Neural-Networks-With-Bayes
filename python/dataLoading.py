@@ -40,7 +40,9 @@ class data_set(Dataset):
         data = {'image': image, "label": label}
 
         return data
-
+    #calculate mean and standard deviation
+    def calculate_mean_and_std(self):
+        pass
     def count_classes(self):
 
         LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
