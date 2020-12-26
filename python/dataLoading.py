@@ -7,11 +7,11 @@ from torch.utils.data import Dataset
 import torchvision.transforms.functional as TrsF
 from tqdm import tqdm
 
-class dataSet(Dataset):
+class data_set(Dataset):
 
-    def __init__(self, meta_path, labels_path=False, transforms=None):
+    def __init__(self, meta_path, root_dir, labels_path=False, transforms=None):
 
-        self.train_image_dir = "ISIC_2019_Training_Input/"
+        self.train_image_dir = root_dir
         #self.metadata = pd.read_csv(meta_path)
         self.file_names = os.listdir(self.train_image_dir)
         self.file_names.sort()

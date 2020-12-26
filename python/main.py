@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 EPOCHS = 3
-DEBUG = False
+DEBUG = True
 ENABLE_GPU = False
 
 if ENABLE_GPU:
@@ -33,7 +33,7 @@ composed = transforms.Compose([
                                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]) #TODO calculate mean and std
                                ])
 
-train_data = dataLoading.dataSet("Training_meta_data/ISIC_2019_Training_Metadata.csv", "Training_meta_data/ISIC_2019_Training_GroundTruth.csv", transforms=composed)
+train_data = dataLoading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed)
 
 # Make a binary classifier initially
 train_data.make_equal()
@@ -244,6 +244,7 @@ def test(testing_set, verboose=False):
     return accuracy, average_loss
 
 
+    return accuracy, average_loss
 
 intervals, val_losses, train_losses, val_accuracies, train_accuracies = train(verboose=True)
 
@@ -251,4 +252,8 @@ dataPlot.plot_loss(intervals, val_losses, train_losses)
 dataPlot.plot_validation(intervals, val_accuracies, train_accuracies)
 #test()
 
+intervals, val_losses, train_losses, val_accuracies, train_accuracies = train()
+
+dataPlot.plot_loss(intervals, val_losses, train_losses)
+dataPlot.plot_validation(intervals, val_accuracies, train_accuracies)
 
