@@ -58,6 +58,7 @@ class dataPlotting():
         plt.xlabel("Epoch")
         plt.ylabel("Loss value")
         plt.legend(loc='best')
+        plt.ylim([100, 0])
         plt.show()
 
     def plot_validation(self, epochs, results_val, results_test):
@@ -67,4 +68,5 @@ class dataPlotting():
         plt.xlabel("Epoch")
         plt.ylabel("Accuracy (%)")
         plt.legend(loc='best')
+        plt.ylim([100, 0])
         plt.show()

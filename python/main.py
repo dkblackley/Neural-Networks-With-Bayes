@@ -11,7 +11,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 3
+EPOCHS = 1
 DEBUG = True
 ENABLE_GPU = False
 
@@ -29,19 +29,18 @@ composed = transforms.Compose([
                                 transforms.Resize((256, 256), Image.LANCZOS),
                                 dataLoading.randomCrop(224),
                                 transforms.ToTensor(),
-                                transforms.Normalize(mean=[0.3630, 0.0702, 0.0546], std=[0.3992, 0.3802, 0.4071]) #TODO calculate mean and std
+                                transforms.Normalize(mean=[0.3630, 0.0702, 0.0546], std=[0.3992, 0.3802, 0.4071])
                                ])
 
 train_data = dataLoading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed)
 
-train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True)
-helper.get_mean_and_std(train_set)
+#train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True)
+#helper.get_mean_and_std(train_set)
 
 # Make a binary classifier initially
 #train_data.make_equal()
 weights = list(train_data.count_classes().values())
 weights.pop()
-total = len(train_data)
 
 
 # make a validation set
@@ -223,11 +222,11 @@ def test(testing_set, verboose=False):
     return accuracy, average_loss
 
 
-    return accuracy, average_loss
-
 intervals, val_losses, train_losses, val_accuracies, train_accuracies = train(verboose=True)
 
 dataPlot.plot_loss(intervals, val_losses, train_losses)
 dataPlot.plot_validation(intervals, val_accuracies, train_accuracies)
+
+helper.save_net(network, "Saved_model/")
 
 
