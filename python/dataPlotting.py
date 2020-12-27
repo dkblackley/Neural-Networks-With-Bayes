@@ -2,6 +2,9 @@ from __future__ import print_function, division
 import torch
 import matplotlib.pyplot as plt
 from torchvision import transforms, utils
+import numpy as np
+import seaborn as sn
+import pandas as pd
 
 
 #LABELS = {'MEL': 0, 'NV': 1, 'BCC': 2, 'AK': 3, 'BKL': 4, 'DF': 5, 'VASC': 6, 'SCC': 7, 'UNK': 8}
@@ -58,7 +61,6 @@ class dataPlotting():
         plt.xlabel("Epoch")
         plt.ylabel("Loss value")
         plt.legend(loc='best')
-        plt.ylim([100, 0])
         plt.show()
 
     def plot_validation(self, epochs, results_val, results_test):
@@ -68,5 +70,22 @@ class dataPlotting():
         plt.xlabel("Epoch")
         plt.ylabel("Accuracy (%)")
         plt.legend(loc='best')
-        plt.ylim([100, 0])
+
+        maxi = max([max(results_test) + 20, max(results_val) + 20])
+        mini = min([min(results_test) - 20, min(results_val) - 20])
+
+        plt.ylim([mini, maxi])
+        plt.show()
+
+    def plot_confusion(self, array):
+
+
+
+        print(array)
+        df_cm = pd.DataFrame(array, index=[i for i in list(LABELS.values())],
+                             columns=[i for i in list(LABELS.values())])
+        plt.figure(figsize=(15, 10))
+        sn.set(font_scale=1.4)  # for label size
+        sn.heatmap(df_cm, annot=True, annot_kws={"size": 14}, fmt='d') # font size
+
         plt.show()

@@ -11,7 +11,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 1
+EPOCHS = 2
 DEBUG = True
 ENABLE_GPU = False
 
@@ -44,7 +44,7 @@ weights.pop()
 
 
 # make a validation set
-val_data, train_data = random_split(train_data, [331, 25000])
+val_data, train_data = random_split(train_data, [2331, 23000])
 
 
 
@@ -118,16 +118,16 @@ def train(verboose=False):
                 index += 1
 
                 if answer == real_answer:
-                    label = LABELS[real_answer.item()]
+                    label = LABELS[answer.item()]
                     correct_count[label] += 1
                     correct += 1
                 else:
-                    label = LABELS[real_answer.item()]
+                    label = LABELS[answer.item()]
                     incorrect_count[label] += 1
                     incorrect += 1
                 total += 1
 
-            if percentage >= 10 and DEBUG:
+            if percentage >= 3 and DEBUG:
                 print(loss)
                 break
 
@@ -153,7 +153,7 @@ def train(verboose=False):
 
         train_accuracy.append(accuracy)
 
-        accuracy, val_loss = test(val_set, verboose=verboose)
+        accuracy, val_loss, _ = test(val_set, verboose=verboose)
         val_losses.append(val_loss)
         val_accuracy.append(accuracy)
 
@@ -168,8 +168,11 @@ def test(testing_set, verboose=False):
     incorrect = 0
     correct_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
     incorrect_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
-    average_losses = []
     losses = []
+    confusion_matrix = []
+
+    for i in range(9):
+        confusion_matrix.append([0, 0, 0, 0, 0, 0, 0, 0, 0])
 
     print("\nTesting Data...")
     with torch.no_grad():
@@ -187,16 +190,24 @@ def test(testing_set, verboose=False):
             index = 0
 
             for output in outputs:
+
                 answer = torch.argmax(output)
+
+                if answer.item() != 1:
+                    pass
+
                 real_answer = label_batch[index]
+
+                confusion_matrix[real_answer.item()][answer.item()] += 1
+
                 index += 1
 
                 if answer == real_answer:
-                    label = LABELS[real_answer.item()]
+                    label = LABELS[answer.item()]
                     correct_count[label] += 1
                     correct += 1
                 else:
-                    label = LABELS[real_answer.item()]
+                    label = LABELS[answer.item()]
                     incorrect_count[label] += 1
                     incorrect += 1
                 total += 1
@@ -217,9 +228,9 @@ def test(testing_set, verboose=False):
     print(f"Total = {total}")
 
     print(f"Test Accuracy = {accuracy}%")
-    print(f"Test Loss = {average_loss}%")
+    print(f"Test Loss = {average_loss}")
 
-    return accuracy, average_loss
+    return accuracy, average_loss, confusion_matrix
 
 
 intervals, val_losses, train_losses, val_accuracies, train_accuracies = train(verboose=True)
@@ -227,6 +238,10 @@ intervals, val_losses, train_losses, val_accuracies, train_accuracies = train(ve
 dataPlot.plot_loss(intervals, val_losses, train_losses)
 dataPlot.plot_validation(intervals, val_accuracies, train_accuracies)
 
-helper.save_net(network, "Saved_model/")
+helper.save_net(network, "Saved_model/model_parameters")
+network = helper.load_net("Saved_model/model_parameters")
 
+_, __, confusion_matrix = test(val_set, verboose=True)
+
+dataPlot.plot_confusion(confusion_matrix)
 
