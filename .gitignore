@@ -141,3 +141,6 @@ python/.Idea/httpRequests/
 python/ISIC_2019*
 python/.*
 python/MNIST
+
+python/Saved_model
+python/saved_models
