@@ -1,51 +1,51 @@
+"""
+Main.py: The file responsible for being the entrypoint into the program,
+Deals with things like weight balancing, training and testing methods and
+calling other classes for plotting results of the network
+"""
+
 import torch
 import torch.optim as optimizer
 from torchvision import transforms
 from PIL import Image
 from torch.utils.data import random_split, WeightedRandomSampler
-import dataLoading
-import dataPlotting
+import data_loading
+import data_plotting
 import helper
 import model
 import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 2
-DEBUG = True
-ENABLE_GPU = False
+EPOCHS = 25
+DEBUG = False  # Toggle this to only run for 3% of the training data
+ENABLE_GPU = False  # Toggle this to enable or disable GPU
 
 if ENABLE_GPU:
     device = torch.device("cuda:0")
 else:
     device = torch.device("cpu")
 
-dataPlot = dataPlotting.dataPlotting()
+data_plot = data_plotting.DataPlotting()
 
 
 composed = transforms.Compose([
                                 transforms.RandomVerticalFlip(),
                                 transforms.RandomHorizontalFlip(),
                                 transforms.Resize((256, 256), Image.LANCZOS),
-                                dataLoading.randomCrop(224),
+                                data_loading.RandomCrop(224),
                                 transforms.ToTensor(),
+                                # call helper.get_mean_and_std(data_set) to get mean and std
                                 transforms.Normalize(mean=[0.3630, 0.0702, 0.0546], std=[0.3992, 0.3802, 0.4071])
                                ])
 
-train_data = dataLoading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed)
+train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed)
 
-#train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True)
-#helper.get_mean_and_std(train_set)
-
-# Make a binary classifier initially
-#train_data.make_equal()
 weights = list(train_data.count_classes().values())
-weights.pop()
-
+weights.pop()  # Remove the Unknown class
 
 # make a validation set
 val_data, train_data = random_split(train_data, [2331, 23000])
-
 
 
 train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True)
@@ -57,6 +57,9 @@ network.to(device)
 
 optim = optimizer.Adam(network.parameters(), lr=0.001)
 
+
+# Different methods for weight calculating, TODO: remove this at some point
+"""
 #weights = [(total / (4522)), (total / (12875)), (total / (3323)), (total / (867)), (total / (2624)), (total / (239)), (total / (253)), (total / (628))]
 #weights = [((4522) / total), ((12875) / total), ((3323) / total), ((867) / total), ((2624) / total), ((239) / total), ((253) / total), ((628) / total), 0.0]
 #weights = [(1 / (4522)), (1 / (12875)), (1 / (3323)), (1 / (867)), (1 / (2624)), (1 / (239)), (1 / (253)), (1 / (628))]
@@ -65,16 +68,23 @@ optim = optimizer.Adam(network.parameters(), lr=0.001)
 #weights = np.multiply(6034, weights)
 #weights = 1.0 / torch.Tensor([4522, 12875, 3323, 867, 2624, 239, 253, 628])
 #weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
-
 #class_weights = [1 - (x / sum(weights)) for x in weights]
-class_weights = torch.FloatTensor(weights).to(device)
 #class_weights = torch.tensor(np.multiply(6034, lossWeights), dtype = dtype)
 #loss_function = nn.CrossEntropyLoss(weight=class_weights)
+"""
+
+class_weights = torch.FloatTensor(weights).to(device)
 loss_function = nn.CrossEntropyLoss(weight=class_weights)
 
 
-
 def train(verboose=False):
+    """
+    trains the network while also recording the accuracy of the network on the training data
+    :param verboose: If true dumps out debug info about which classes the network is predicting when correct and incorrect
+    :return: returns the number of epochs, a list of the validation set losses per epoch, a list of the
+    training set losses per epoch, a list of the validation accuracy per epoch and the
+    training accuracy per epoch
+    """
     print("\nTraining Network")
 
     intervals = []
@@ -86,7 +96,6 @@ def train(verboose=False):
     for epoch in range(EPOCHS):
 
         losses = []
-        interval = 10
 
         correct = 0
         total = 0
@@ -95,6 +104,7 @@ def train(verboose=False):
         incorrect_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
 
         print(f"\nEpoch {epoch + 1} of {EPOCHS}:")
+
         for i_batch, sample_batch in enumerate(tqdm(train_set)):
             image_batch = sample_batch['image']
             label_batch = sample_batch['label']
@@ -107,7 +117,7 @@ def train(verboose=False):
             loss.backward()
             optim.step()
 
-            percentage = (i_batch / len(train_set)) * 100
+            percentage = (i_batch / len(train_set)) * 100  # Used for Debugging
 
             losses.append(loss.item())
             index = 0
@@ -157,12 +167,17 @@ def train(verboose=False):
         val_losses.append(val_loss)
         val_accuracy.append(accuracy)
 
-        #if DEBUG:
-        #    return intervals, val_losses, train_losses, val_accuracy, train_accuracy
     return intervals, val_losses, train_losses, val_accuracy, train_accuracy
 
 
 def test(testing_set, verboose=False):
+    """
+    Use to test the network on a given data set
+    :param testing_set: The data set that the network will predict for
+    :param verboose: Dumps out debug data showing which class the network is predicting for
+    :return: accuracy of network on dataset, loss of network and also a confusion matrix in the
+    form of a list of lists
+    """
     correct = 0
     total = 0
     incorrect = 0
@@ -175,6 +190,7 @@ def test(testing_set, verboose=False):
         confusion_matrix.append([0, 0, 0, 0, 0, 0, 0, 0, 0])
 
     print("\nTesting Data...")
+
     with torch.no_grad():
         for i_batch, sample_batch in enumerate(tqdm(testing_set)):
             image_batch = sample_batch['image']
@@ -192,12 +208,7 @@ def test(testing_set, verboose=False):
             for output in outputs:
 
                 answer = torch.argmax(output)
-
-                if answer.item() != 1:
-                    pass
-
                 real_answer = label_batch[index]
-
                 confusion_matrix[real_answer.item()][answer.item()] += 1
 
                 index += 1
@@ -216,6 +227,7 @@ def test(testing_set, verboose=False):
     accuracy = (correct / total) * 100
 
     if (verboose):
+
         print("\n Correct Predictions: ")
         for label, count in correct_count.items():
             print(f"{label}: {count / correct * 100}%")
@@ -235,13 +247,13 @@ def test(testing_set, verboose=False):
 
 intervals, val_losses, train_losses, val_accuracies, train_accuracies = train(verboose=True)
 
-dataPlot.plot_loss(intervals, val_losses, train_losses)
-dataPlot.plot_validation(intervals, val_accuracies, train_accuracies)
+data_plot.plot_loss(intervals, val_losses, train_losses)
+data_plot.plot_validation(intervals, val_accuracies, train_accuracies)
 
 helper.save_net(network, "Saved_model/model_parameters")
 network = helper.load_net("Saved_model/model_parameters")
 
 _, __, confusion_matrix = test(val_set, verboose=True)
 
-dataPlot.plot_confusion(confusion_matrix)
+data_plot.plot_confusion(confusion_matrix)
 
