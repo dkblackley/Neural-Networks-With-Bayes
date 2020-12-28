@@ -6,6 +6,7 @@ means and standard deviation etc.
 import torch
 import model
 from tqdm import tqdm
+import csv
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 
@@ -67,3 +68,15 @@ def get_mean_and_std(data_set):
     print(f"Standard Deviation: {std}")
 
     return mean, std
+
+
+def write_csv(list_to_write, filename):
+    """
+    writes a list of items to a output file, used mainly for saving loss and accuracy values
+    :param list_to_write: list to write to csv
+    :param filename: location and name of csv file
+    :return:
+    """
+    with open(filename, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(list_to_write)

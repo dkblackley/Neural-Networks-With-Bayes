@@ -251,6 +251,12 @@ data_plot.plot_loss(intervals, val_losses, train_losses)
 data_plot.plot_validation(intervals, val_accuracies, train_accuracies)
 
 helper.save_net(network, "Saved_model/model_parameters")
+
+helper.write_csv(val_losses, "Saved_model/val_losses.csv")
+helper.write_csv(train_losses, "Saved_model/train_losses.csv")
+helper.write_csv(val_accuracies, "Saved_model/val_accuracies.csv")
+helper.write_csv(train_accuracies, "Saved_model/train_accuracies.csv")
+
 network = helper.load_net("Saved_model/model_parameters")
 
 _, __, confusion_matrix = test(val_set, verboose=True)
