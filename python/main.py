@@ -17,8 +17,8 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 25
-DEBUG = False  # Toggle this to only run for 3% of the training data
+EPOCHS = 2
+DEBUG = True  # Toggle this to only run for 3% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 
 if ENABLE_GPU:
@@ -256,10 +256,15 @@ def train_new_net():
     helper.write_csv(val_accuracies, "saved_model/val_accuracies.csv")
     helper.write_csv(train_accuracies, "saved_model/train_accuracies.csv")
 
+    _, __, confusion_matrix = test(val_set, verboose=True)
+    data_plot.plot_confusion(confusion_matrix, "Validation Set")
 
-network = helper.load_net("saved_model/model_parameters")
+    _, __, confusion_matrix = test(train_set, verboose=True)
+    data_plot.plot_confusion(confusion_matrix, "Training Set")
 
+#train_new_net()
+
+network = helper.load_net("saved_models/Classifier params 2 25 epochs/model_parameters")
 _, __, confusion_matrix = test(val_set, verboose=True)
-
-data_plot.plot_confusion(confusion_matrix)
+data_plot.plot_confusion(confusion_matrix, "Validation Set")
 

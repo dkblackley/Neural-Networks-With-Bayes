@@ -102,17 +102,18 @@ class DataPlotting:
         plt.savefig("saved_model/accuracy.png")
         plt.show()
 
-    def plot_confusion(self, array):
+    def plot_confusion(self, array, title):
         """
         Plots a confusion matrix
+        :param title: title for the plot
         :param array: a list of lists containing a representation of how the network predicted
-        :return:
         """
         df_cm = pd.DataFrame(array, index=[i for i in list(self.LABELS.values())],
                              columns=[i for i in list(self.LABELS.values())])
         plt.figure(figsize=(15, 10))
         sn.set(font_scale=1.4)  # for label size
         sn.heatmap(df_cm, annot=True, annot_kws={"size": 16}, fmt='d') # font size
+        plt.title(title)
 
         plt.savefig("saved_model/confusion.png")
         plt.show()
