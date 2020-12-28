@@ -245,21 +245,21 @@ def test(testing_set, verboose=False):
     return accuracy, average_loss, confusion_matrix
 
 
-intervals, val_losses, train_losses, val_accuracies, train_accuracies = train(verboose=True)
+def train_new_net():
+    intervals, val_losses, train_losses, val_accuracies, train_accuracies = train(verboose=True)
+    data_plot.plot_loss(intervals, val_losses, train_losses)
+    data_plot.plot_validation(intervals, val_accuracies, train_accuracies)
 
-data_plot.plot_loss(intervals, val_losses, train_losses)
-data_plot.plot_validation(intervals, val_accuracies, train_accuracies)
+    helper.save_net(network, "saved_model/model_parameters")
+    helper.write_csv(val_losses, "saved_model/val_losses.csv")
+    helper.write_csv(train_losses, "saved_model/train_losses.csv")
+    helper.write_csv(val_accuracies, "saved_model/val_accuracies.csv")
+    helper.write_csv(train_accuracies, "saved_model/train_accuracies.csv")
 
-helper.save_net(network, "Saved_model/model_parameters")
 
-helper.write_csv(val_losses, "Saved_model/val_losses.csv")
-helper.write_csv(train_losses, "Saved_model/train_losses.csv")
-helper.write_csv(val_accuracies, "Saved_model/val_accuracies.csv")
-helper.write_csv(train_accuracies, "Saved_model/train_accuracies.csv")
+network = helper.load_net("saved_model/model_parameters")
 
-network = helper.load_net("Saved_model/model_parameters")
-
-_, __, confusion_matrix = test(val_set, verboose=True)
+_, __, confusion_matrix = test(train_set, verboose=True)
 
 data_plot.plot_confusion(confusion_matrix)
 

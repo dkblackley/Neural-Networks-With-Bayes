@@ -14,7 +14,7 @@ import pandas as pd
 
 class DataPlotting:
     """
-    Class for data plotting with matplotlib, contains methods flor plotting loss, accuracies and
+    Class for data plotting with matplotlib, contains methods for plotting loss, accuracies and
     confusion matrices
     """
     LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
@@ -79,7 +79,7 @@ class DataPlotting:
         plt.ylabel("Loss value")
         plt.legend(loc='best')
         plt.show()
-        plt.savefig("Saved_model/loss.png")
+        plt.savefig("saved_model/loss.png")
 
     def plot_validation(self, epochs, results_val, results_test):
         """
@@ -100,7 +100,7 @@ class DataPlotting:
 
         plt.ylim([mini, maxi])
         plt.show()
-        plt.savefig("Saved_model/accuracy.png")
+        plt.savefig("saved_model/accuracy.png")
 
     def plot_confusion(self, array):
         """
@@ -115,4 +115,4 @@ class DataPlotting:
         sn.heatmap(df_cm, annot=True, annot_kws={"size": 16}, fmt='d') # font size
 
         plt.show()
-        plt.savefig("Saved_model/confusion.png")
+        plt.savefig("saved_model/confusion.png")
