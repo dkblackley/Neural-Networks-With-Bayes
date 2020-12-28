@@ -209,7 +209,7 @@ def test(testing_set, verboose=False):
 
                 answer = torch.argmax(output)
                 real_answer = label_batch[index]
-                confusion_matrix[real_answer.item()][answer.item()] += 1
+                confusion_matrix[answer.item()][real_answer.item()] += 1
 
                 index += 1
 
@@ -259,7 +259,7 @@ def train_new_net():
 
 network = helper.load_net("saved_model/model_parameters")
 
-_, __, confusion_matrix = test(train_set, verboose=True)
+_, __, confusion_matrix = test(val_set, verboose=True)
 
 data_plot.plot_confusion(confusion_matrix)
 

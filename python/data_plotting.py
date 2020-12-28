@@ -78,8 +78,8 @@ class DataPlotting:
         plt.xlabel("Epoch")
         plt.ylabel("Loss value")
         plt.legend(loc='best')
-        plt.show()
         plt.savefig("saved_model/loss.png")
+        plt.show()
 
     def plot_validation(self, epochs, results_val, results_test):
         """
@@ -99,8 +99,8 @@ class DataPlotting:
         mini = min([min(results_test) - 10, min(results_val) - 10])
 
         plt.ylim([mini, maxi])
-        plt.show()
         plt.savefig("saved_model/accuracy.png")
+        plt.show()
 
     def plot_confusion(self, array):
         """
@@ -114,5 +114,5 @@ class DataPlotting:
         sn.set(font_scale=1.4)  # for label size
         sn.heatmap(df_cm, annot=True, annot_kws={"size": 16}, fmt='d') # font size
 
-        plt.show()
         plt.savefig("saved_model/confusion.png")
+        plt.show()
