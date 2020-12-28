@@ -79,6 +79,7 @@ class DataPlotting:
         plt.ylabel("Loss value")
         plt.legend(loc='best')
         plt.show()
+        plt.savefig("Saved_model/loss.png")
 
     def plot_validation(self, epochs, results_val, results_test):
         """
@@ -99,6 +100,7 @@ class DataPlotting:
 
         plt.ylim([mini, maxi])
         plt.show()
+        plt.savefig("Saved_model/accuracy.png")
 
     def plot_confusion(self, array):
         """
@@ -113,3 +115,4 @@ class DataPlotting:
         sn.heatmap(df_cm, annot=True, annot_kws={"size": 16}, fmt='d') # font size
 
         plt.show()
+        plt.savefig("Saved_model/confusion.png")
