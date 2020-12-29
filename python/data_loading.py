@@ -42,7 +42,8 @@ class data_set(Dataset):
 
     def __getitem__(self, index):
         """
-        Dynamically loads and returns an image at specified index
+        Dynamically loads and returns an image at specified index with label attached.
+        If there is no label then it returns False as a label
         :param index: index of image to load
         :return: dictionary containing image and label
         """
@@ -50,7 +51,10 @@ class data_set(Dataset):
         file_name = self.file_names[index]
         full_path = os.path.join(self.train_image_dir, file_name)
         image = Image.open(full_path)
-        label = self.get_class_name(self.labels.iloc[index].values)[0]
+        if self.labels is False:
+            label = False
+        else:
+            label = self.get_class_name(self.labels.iloc[index].values)[0]
 
         if self.transforms:
             image = self.transforms(image)
@@ -58,6 +62,9 @@ class data_set(Dataset):
         data = {'image': image, "label": label}
 
         return data
+
+    def get_filename(self, index):
+        return self.file_names[index]
 
     def count_classes(self):
 

@@ -16,7 +16,7 @@ class Classifier(nn.Module):
         :param dropout: rate for dropout
         """
         super(Classifier, self).__init__()
-        self.model = EfficientNet.from_name("efficientnet-b0")
+        self.model = EfficientNet.from_pretrained("efficientnet-b0")
         self.drop_rate = dropout
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.output_layer = nn.Linear(1280, 8)

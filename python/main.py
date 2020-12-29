@@ -20,6 +20,7 @@ LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7:
 EPOCHS = 2
 DEBUG = True  # Toggle this to only run for 3% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
+BATCH_SIZE = 32
 
 if ENABLE_GPU:
     device = torch.device("cuda:0")
@@ -32,7 +33,7 @@ data_plot = data_plotting.DataPlotting()
 composed = transforms.Compose([
                                 transforms.RandomVerticalFlip(),
                                 transforms.RandomHorizontalFlip(),
-                                transforms.Resize((256, 256), Image.LANCZOS),
+                                transforms.Resize((250, 250), Image.LANCZOS),
                                 data_loading.RandomCrop(224),
                                 transforms.ToTensor(),
                                 # call helper.get_mean_and_std(data_set) to get mean and std
@@ -40,16 +41,19 @@ composed = transforms.Compose([
                                ])
 
 train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed)
+test_data = data_loading.data_set("Test_meta_data/ISIC_2019_Test_Metadata.csv", "ISIC_2019_Test_Input", transforms=composed)
 
-weights = list(train_data.count_classes().values())
+"""weights = list(train_data.count_classes().values())
 weights.pop()  # Remove the Unknown class
-
+"""
+weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
 # make a validation set
 val_data, train_data = random_split(train_data, [2331, 23000])
 
 
-train_set = torch.utils.data.DataLoader(train_data, batch_size=30, shuffle=True)
-val_set = torch.utils.data.DataLoader(val_data, batch_size=30, shuffle=True)
+train_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
+val_set = torch.utils.data.DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=True)
+test_set = torch.utils.data.DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=True)
 
 
 network = model.Classifier()
@@ -77,7 +81,7 @@ class_weights = torch.FloatTensor(weights).to(device)
 loss_function = nn.CrossEntropyLoss(weight=class_weights)
 
 
-def train(verboose=False):
+def train(verbose=False):
     """
     trains the network while also recording the accuracy of the network on the training data
     :param verboose: If true dumps out debug info about which classes the network is predicting when correct and incorrect
@@ -143,7 +147,7 @@ def train(verboose=False):
 
         accuracy = (correct / total) * 100
 
-        if (verboose):
+        if (verbose):
 
             print("\n Correct Predictions: ")
             for label, count in correct_count.items():
@@ -163,14 +167,14 @@ def train(verboose=False):
 
         train_accuracy.append(accuracy)
 
-        accuracy, val_loss, _ = test(val_set, verboose=verboose)
+        accuracy, val_loss, _ = test(val_set, verbose=verbose)
         val_losses.append(val_loss)
         val_accuracy.append(accuracy)
 
     return intervals, val_losses, train_losses, val_accuracy, train_accuracy
 
 
-def test(testing_set, verboose=False):
+def test(testing_set, verbose=False):
     """
     Use to test the network on a given data set
     :param testing_set: The data set that the network will predict for
@@ -226,7 +230,7 @@ def test(testing_set, verboose=False):
     average_loss = (sum(losses) / len(losses))
     accuracy = (correct / total) * 100
 
-    if (verboose):
+    if (verbose):
 
         print("\n Correct Predictions: ")
         for label, count in correct_count.items():
@@ -244,9 +248,47 @@ def test(testing_set, verboose=False):
 
     return accuracy, average_loss, confusion_matrix
 
+def predict(data_set, data_loader):
+    """
+    Predicts on a data set without labels
+    :param data_set: data set to predict on
+    :param data_loader: data loader to get the filename from
+    :return: a list of lists holding the networks predictions for each class
+    """
+    batch = 0
+    predictions = [['image', 'MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC', 'UNK']]
+
+    for i_batch, sample_batch in enumerate(tqdm(data_set)):
+
+        batch += 1
+
+
+        image_batch = sample_batch['image']
+        label_batch = sample_batch['label']
+
+        image_batch = image_batch.to(device)
+
+        outputs = network(image_batch, dropout=False)
+
+        for i in range (0, BATCH_SIZE):
+            try:
+                answer = []
+                answer = outputs[i].tolist()
+                answer.insert(0, data_loader.get_filename(i + (BATCH_SIZE * i_batch)))
+                predictions.append(answer)
+            # for the last batch, which won't be perfectly of size BATCH_SIZE
+            except Exception as e:
+                break
+
+    return predictions
+
 
 def train_new_net():
-    intervals, val_losses, train_losses, val_accuracies, train_accuracies = train(verboose=True)
+    """
+    Trains a network, saving the parameters and the losses/accuracies over time
+    :return:
+    """
+    intervals, val_losses, train_losses, val_accuracies, train_accuracies = train(verbose=True)
     data_plot.plot_loss(intervals, val_losses, train_losses)
     data_plot.plot_validation(intervals, val_accuracies, train_accuracies)
 
@@ -256,15 +298,21 @@ def train_new_net():
     helper.write_csv(val_accuracies, "saved_model/val_accuracies.csv")
     helper.write_csv(train_accuracies, "saved_model/train_accuracies.csv")
 
-    _, __, confusion_matrix = test(val_set, verboose=True)
+    _, __, confusion_matrix = test(val_set, verbose=True)
     data_plot.plot_confusion(confusion_matrix, "Validation Set")
 
-    _, __, confusion_matrix = test(train_set, verboose=True)
+    _, __, confusion_matrix = test(train_set, verbose=True)
     data_plot.plot_confusion(confusion_matrix, "Training Set")
 
 #train_new_net()
 
+
 network = helper.load_net("saved_models/Classifier params 2 25 epochs/model_parameters")
-_, __, confusion_matrix = test(val_set, verboose=True)
+
+predictions = predict(test_set, test_data)
+helper.write_csv(predictions, "saved_model/predictions.csv")
+
+_, __, confusion_matrix = test(val_set, verbose=True)
+
 data_plot.plot_confusion(confusion_matrix, "Validation Set")
 

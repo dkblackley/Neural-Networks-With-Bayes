@@ -79,4 +79,4 @@ def write_csv(list_to_write, filename):
     """
     with open(filename, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(list_to_write)
+        writer.writerows(list_to_write)
