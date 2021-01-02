@@ -28,7 +28,7 @@ def plot_samples(data_set, data_plot):
 
     for i_batch, sample_batch in enumerate(data_set):
         print(i_batch, sample_batch['image'].size(),
-              sample_batch['label'].size())
+              LABELS[sample_batch['label']])
 
         if i_batch == 3:
             data_plot.show_batch(sample_batch, 3)

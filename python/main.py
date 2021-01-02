@@ -17,10 +17,11 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 2
+EPOCHS = 3
 DEBUG = True  # Toggle this to only run for 3% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
+image_size = 224
 
 if ENABLE_GPU:
     device = torch.device("cuda:0")
@@ -33,8 +34,10 @@ data_plot = data_plotting.DataPlotting()
 composed = transforms.Compose([
                                 transforms.RandomVerticalFlip(),
                                 transforms.RandomHorizontalFlip(),
-                                transforms.Resize((250, 250), Image.LANCZOS),
-                                data_loading.RandomCrop(224),
+                                # randomly crop out 10% of the total image
+                                transforms.Resize((int((image_size/100) * 10) + image_size,
+                                                   int((image_size/100) * 10) + image_size), Image.LANCZOS),
+                                data_loading.RandomCrop(image_size),
                                 transforms.ToTensor(),
                                 # call helper.get_mean_and_std(data_set) to get mean and std
                                 transforms.Normalize(mean=[0.3630, 0.0702, 0.0546], std=[0.3992, 0.3802, 0.4071])
@@ -56,26 +59,10 @@ val_set = torch.utils.data.DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=T
 test_set = torch.utils.data.DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=True)
 
 
-network = model.Classifier()
+network = model.Classifier(image_size)
 network.to(device)
 
 optim = optimizer.Adam(network.parameters(), lr=0.001)
-
-
-# Different methods for weight calculating, TODO: remove this at some point
-"""
-#weights = [(total / (4522)), (total / (12875)), (total / (3323)), (total / (867)), (total / (2624)), (total / (239)), (total / (253)), (total / (628))]
-#weights = [((4522) / total), ((12875) / total), ((3323) / total), ((867) / total), ((2624) / total), ((239) / total), ((253) / total), ((628) / total), 0.0]
-#weights = [(1 / (4522)), (1 / (12875)), (1 / (3323)), (1 / (867)), (1 / (2624)), (1 / (239)), (1 / (253)), (1 / (628))]
-#weights = [(1 - (4522) / total), (1 - (12875) / total), (1 - (3323) / total), (1 - (867) / total), (1 - (2624) / total), (1 - (239) / total), (1 - (253) / total), (1 - (628) / total), 0.0]
-#weights = [1/1002, 1/6034, 1/990, 1/295, 1/462, 1/104, 1/104, 1/128, 0]
-#weights = np.multiply(6034, weights)
-#weights = 1.0 / torch.Tensor([4522, 12875, 3323, 867, 2624, 239, 253, 628])
-#weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
-#class_weights = [1 - (x / sum(weights)) for x in weights]
-#class_weights = torch.tensor(np.multiply(6034, lossWeights), dtype = dtype)
-#loss_function = nn.CrossEntropyLoss(weight=class_weights)
-"""
 
 class_weights = torch.FloatTensor(weights).to(device)
 loss_function = nn.CrossEntropyLoss(weight=class_weights)
@@ -304,7 +291,9 @@ def train_new_net():
     _, __, confusion_matrix = test(train_set, verbose=True)
     data_plot.plot_confusion(confusion_matrix, "Training Set")
 
-#train_new_net()
+#helper.plot_samples(train_data, data_plot)
+
+train_new_net()
 
 
 network = helper.load_net("saved_models/Classifier params 2 25 epochs/model_parameters")
