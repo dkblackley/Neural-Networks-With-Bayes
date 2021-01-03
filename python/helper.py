@@ -39,8 +39,8 @@ def save_net(network, PATH):
     torch.save(network.state_dict(), PATH)
 
 
-def load_net(PATH):
-    net = model.Classifier()
+def load_net(PATH, image_size):
+    net = model.Classifier(image_size)
     net.load_state_dict(torch.load(PATH))
     net.eval()
     return net
@@ -69,6 +69,21 @@ def get_mean_and_std(data_set):
 
     return mean, std
 
+def read_csv(filename):
+
+    list_to_return = []
+
+    with open(filename) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        for row in csv_reader:
+            list_to_return += row
+
+    new_list = []
+
+    for item in list_to_return:
+        new_list.append(float(item))
+
+    return new_list
 
 def write_csv(list_to_write, filename):
     """
@@ -79,4 +94,5 @@ def write_csv(list_to_write, filename):
     """
     with open(filename, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerows(list_to_write)
+        writer.writerow(list_to_write)
+

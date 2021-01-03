@@ -17,8 +17,8 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 3
-DEBUG = True  # Toggle this to only run for 3% of the training data
+EPOCHS = 25
+DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 image_size = 224
@@ -29,7 +29,6 @@ else:
     device = torch.device("cpu")
 
 data_plot = data_plotting.DataPlotting()
-
 
 composed = transforms.Compose([
                                 transforms.RandomVerticalFlip(),
@@ -47,8 +46,8 @@ train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metada
 test_data = data_loading.data_set("Test_meta_data/ISIC_2019_Test_Metadata.csv", "ISIC_2019_Test_Input", transforms=composed)
 
 """weights = list(train_data.count_classes().values())
-weights.pop()  # Remove the Unknown class
-"""
+weights.pop()  # Remove the Unknown class"""
+
 weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
 # make a validation set
 val_data, train_data = random_split(train_data, [2331, 23000])
@@ -68,7 +67,7 @@ class_weights = torch.FloatTensor(weights).to(device)
 loss_function = nn.CrossEntropyLoss(weight=class_weights)
 
 
-def train(verbose=False):
+def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy, verbose=False):
     """
     trains the network while also recording the accuracy of the network on the training data
     :param verboose: If true dumps out debug info about which classes the network is predicting when correct and incorrect
@@ -76,25 +75,24 @@ def train(verbose=False):
     training set losses per epoch, a list of the validation accuracy per epoch and the
     training accuracy per epoch
     """
-    print("\nTraining Network")
 
     intervals = []
-    val_losses = []
-    train_losses = []
-    val_accuracy = []
-    train_accuracy = []
 
-    for epoch in range(EPOCHS):
+    for i in range(0, len(val_losses)):
+        intervals.append(i)
+
+    print("\nTraining Network")
+
+    for epoch in range(current_epoch, EPOCHS + current_epoch):
 
         losses = []
-
         correct = 0
         total = 0
         incorrect = 0
         correct_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
         incorrect_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
 
-        print(f"\nEpoch {epoch + 1} of {EPOCHS}:")
+        print(f"\nEpoch {epoch + 1} of {EPOCHS + current_epoch}:")
 
         for i_batch, sample_batch in enumerate(tqdm(train_set)):
             image_batch = sample_batch['image']
@@ -128,7 +126,7 @@ def train(verbose=False):
                     incorrect += 1
                 total += 1
 
-            if percentage >= 3 and DEBUG:
+            if percentage >= 1 and DEBUG:
                 print(loss)
                 break
 
@@ -157,6 +155,11 @@ def train(verbose=False):
         accuracy, val_loss, _ = test(val_set, verbose=verbose)
         val_losses.append(val_loss)
         val_accuracy.append(accuracy)
+
+        data_plot.plot_loss(intervals, val_losses, train_losses)
+        data_plot.plot_validation(intervals, val_accuracy, train_accuracy)
+
+        save_network(val_losses, train_losses, val_accuracy, train_accuracy)
 
     return intervals, val_losses, train_losses, val_accuracy, train_accuracy
 
@@ -270,38 +273,61 @@ def predict(data_set, data_loader):
     return predictions
 
 
-def train_new_net():
-    """
-    Trains a network, saving the parameters and the losses/accuracies over time
-    :return:
-    """
-    intervals, val_losses, train_losses, val_accuracies, train_accuracies = train(verbose=True)
-    data_plot.plot_loss(intervals, val_losses, train_losses)
-    data_plot.plot_validation(intervals, val_accuracies, train_accuracies)
-
+def save_network(val_losses, train_losses, val_accuracies, train_accuracies):
     helper.save_net(network, "saved_model/model_parameters")
     helper.write_csv(val_losses, "saved_model/val_losses.csv")
     helper.write_csv(train_losses, "saved_model/train_losses.csv")
     helper.write_csv(val_accuracies, "saved_model/val_accuracies.csv")
     helper.write_csv(train_accuracies, "saved_model/train_accuracies.csv")
 
-    _, __, confusion_matrix = test(val_set, verbose=True)
-    data_plot.plot_confusion(confusion_matrix, "Validation Set")
 
-    _, __, confusion_matrix = test(train_set, verbose=True)
-    data_plot.plot_confusion(confusion_matrix, "Training Set")
+def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[], train_accuracies=[]):
+    """
+    Trains a network, saving the parameters and the losses/accuracies over time
+    :return:
+    """
+    starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(
+        starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies, verbose=True)
 
+    if not DEBUG:
+
+        _, __, confusion_matrix = test(val_set, verbose=True)
+        data_plot.plot_confusion(confusion_matrix, "Validation Set")
+
+        _, __, confusion_matrix = test(train_set, verbose=True)
+        data_plot.plot_confusion(confusion_matrix, "Training Set")
+
+    return val_losses, train_losses, val_accuracies, train_accuracies
+
+def load_net(root_dir):
+
+    val_losses = helper.read_csv(root_dir + "val_losses.csv")
+    train_losses = helper.read_csv(root_dir + "train_losses.csv")
+    val_accuracies = helper.read_csv(root_dir + "val_accuracies.csv")
+    train_accuracies = helper.read_csv(root_dir + "train_accuracies.csv")
+    network = helper.load_net(root_dir + "model_parameters", image_size)
+
+    return network, len(train_losses), val_losses, train_losses, val_accuracies, train_accuracies
+
+def confusion_array(arrays, class_sizes):
+
+    new_arrays = []
+    index = 0
+
+    for array in arrays:
+        new_array = []
+        for item in array:
+            new_array.append(item[index]/class_sizes[index])
+        new_arrays.append(new_array)
+        index += 1
+
+train_net()
 #helper.plot_samples(train_data, data_plot)
 
-train_new_net()
-
-
-network = helper.load_net("saved_models/Classifier params 2 25 epochs/model_parameters")
+network, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/")
 
 predictions = predict(test_set, test_data)
 helper.write_csv(predictions, "saved_model/predictions.csv")
 
-_, __, confusion_matrix = test(val_set, verbose=True)
 
-data_plot.plot_confusion(confusion_matrix, "Validation Set")
 
