@@ -92,7 +92,19 @@ def write_csv(list_to_write, filename):
     :param filename: location and name of csv file
     :return:
     """
+
     with open(filename, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(list_to_write)
 
+def write_rows(list_to_write, filename):
+    """
+    writes a list of items to a output file, used mainly for saving loss and accuracy values
+    :param list_to_write: list to write to csv
+    :param filename: location and name of csv file
+    :return:
+    """
+
+    with open(filename, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerows(list_to_write)

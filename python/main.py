@@ -21,6 +21,9 @@ EPOCHS = 25
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
+SOFTMAX = True
+MC_DROPOUT = False
+BBB = False
 image_size = 224
 
 if ENABLE_GPU:
@@ -55,7 +58,7 @@ val_data, train_data = random_split(train_data, [2331, 23000])
 
 train_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
 val_set = torch.utils.data.DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=True)
-test_set = torch.utils.data.DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=True)
+test_set = torch.utils.data.DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True)
 
 
 network = model.Classifier(image_size)
@@ -245,6 +248,9 @@ def predict(data_set, data_loader):
     :param data_loader: data loader to get the filename from
     :return: a list of lists holding the networks predictions for each class
     """
+
+    print("Predicting on test set")
+
     batch = 0
     predictions = [['image', 'MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC', 'UNK']]
 
@@ -257,15 +263,30 @@ def predict(data_set, data_loader):
         label_batch = sample_batch['label']
 
         image_batch = image_batch.to(device)
+        soft_max = nn.Softmax()
 
-        outputs = network(image_batch, dropout=False)
+        outputs = soft_max(network(image_batch, dropout=False))
 
         for i in range (0, BATCH_SIZE):
             try:
-                answer = []
-                answer = outputs[i].tolist()
-                answer.insert(0, data_loader.get_filename(i + (BATCH_SIZE * i_batch)))
-                predictions.append(answer)
+                answers = []
+                answers = outputs[i].tolist()
+
+                new_list = []
+                for answer in answers:
+                    answer = round(answer, 3)
+                    new_list.append(answer)
+
+                if SOFTMAX:
+                    if max(answers) <= 0.7:
+                        new_list.append(1.0)
+                    else:
+                        new_list.append(0.0)
+
+                answers = new_list
+
+                answers.insert(0, data_loader.get_filename(i + (BATCH_SIZE * i_batch))[:-4])
+                predictions.append(answers)
             # for the last batch, which won't be perfectly of size BATCH_SIZE
             except Exception as e:
                 break
@@ -293,9 +314,13 @@ def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[
 
         _, __, confusion_matrix = test(val_set, verbose=True)
         data_plot.plot_confusion(confusion_matrix, "Validation Set")
+        confusion_matrix = confusion_array(confusion_matrix)
+        data_plot.plot_confusion(confusion_matrix, "Validation Set (%)")
 
         _, __, confusion_matrix = test(train_set, verbose=True)
         data_plot.plot_confusion(confusion_matrix, "Training Set")
+        confusion_matrix = confusion_array(confusion_matrix)
+        data_plot.plot_confusion(confusion_matrix, "Training Set (%)")
 
     return val_losses, train_losses, val_accuracies, train_accuracies
 
@@ -309,25 +334,28 @@ def load_net(root_dir):
 
     return network, len(train_losses), val_losses, train_losses, val_accuracies, train_accuracies
 
-def confusion_array(arrays, class_sizes):
+def confusion_array(arrays):
 
     new_arrays = []
-    index = 0
 
     for array in arrays:
         new_array = []
-        for item in array:
-            new_array.append(item[index]/class_sizes[index])
-        new_arrays.append(new_array)
-        index += 1
 
-train_net()
+        for item in array:
+            new_array.append(int((item / (sum(array) + 1)) * 100))
+
+        new_arrays.append(new_array)
+
+    return new_arrays
+
+
+#train_net()
 #helper.plot_samples(train_data, data_plot)
 
-network, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/")
+network, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_models/Classifier params 1 25 epochs/")
 
 predictions = predict(test_set, test_data)
-helper.write_csv(predictions, "saved_model/predictions.csv")
+helper.write_rows(predictions, "saved_model/predictions.csv")
 
 
 
