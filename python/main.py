@@ -61,7 +61,7 @@ val_set = torch.utils.data.DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=T
 test_set = torch.utils.data.DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True)
 
 
-network = model.Classifier(image_size)
+network = model.Classifier(image_size, dropout=0.4)
 network.to(device)
 
 optim = optimizer.Adam(network.parameters(), lr=0.001)
@@ -349,10 +349,16 @@ def confusion_array(arrays):
     return new_arrays
 
 
-#train_net()
+train_net()
 #helper.plot_samples(train_data, data_plot)
 
-network, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_models/Classifier params 1 25 epochs/")
+network, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/")
+
+"""train_net(starting_epoch=starting_epoch,
+          val_losses=val_losses,
+          train_losses=train_losses,
+          val_accuracies=val_accuracies,
+          train_accuracies=train_accuracies)"""
 
 predictions = predict(test_set, test_data)
 helper.write_rows(predictions, "saved_model/predictions.csv")
