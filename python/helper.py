@@ -10,28 +10,28 @@ import csv
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 
+def plot_images(data_plot, images, stop):
+    for i in range(len(images)):
+        data = images[i]
+        data_plot.show_data(data)
+        print(i, data['image'].size(), LABELS[data['label']])
+        # Only display the first 3 images
+        if i == stop:
+            break
 
-def plot_samples(data_set, data_plot):
+def plot_set(data_set, data_plot, stop, batch_stop):
     """
     displays image from data set
     :param data_set: data set to display images from
     :param data_plot: plotting class that uses matplotlib to display samples
     """
 
-    for i in range(len(data_set)):
-        data = data_set[i]
-        data_plot.show_data(data)
-        print(i, data['image'].size(), LABELS[data['label']])
-        # Only display the first 3 images
-        if i == 3:
-            break
-
     for i_batch, sample_batch in enumerate(data_set):
         print(i_batch, sample_batch['image'].size(),
-              LABELS[sample_batch['label']])
+              sample_batch['label'].size())
 
-        if i_batch == 3:
-            data_plot.show_batch(sample_batch, 3)
+        if i_batch == stop:
+            data_plot.show_batch(sample_batch, batch_stop)
             break
 
 

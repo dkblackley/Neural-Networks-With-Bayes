@@ -11,6 +11,7 @@ from torch.utils.data import Dataset
 import torchvision.transforms.functional as TrsF
 from tqdm import tqdm
 
+
 class data_set(Dataset):
     """
     class responsible for handling and dynamically retreiving data from the data set

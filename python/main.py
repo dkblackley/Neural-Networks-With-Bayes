@@ -8,7 +8,9 @@ import torch
 import torch.optim as optimizer
 from torchvision import transforms
 from PIL import Image
-from torch.utils.data import random_split, WeightedRandomSampler
+from torch.utils.data import random_split, WeightedRandomSampler, SubsetRandomSampler
+from sklearn.model_selection import train_test_split
+import numpy as np
 import data_loading
 import data_plotting
 import helper
@@ -17,7 +19,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 25
+EPOCHS = 15
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
@@ -42,7 +44,7 @@ composed = transforms.Compose([
                                 data_loading.RandomCrop(image_size),
                                 transforms.ToTensor(),
                                 # call helper.get_mean_and_std(data_set) to get mean and std
-                                transforms.Normalize(mean=[0.3630, 0.0702, 0.0546], std=[0.3992, 0.3802, 0.4071])
+                                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
                                ])
 
 train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed)
@@ -51,20 +53,38 @@ test_data = data_loading.data_set("Test_meta_data/ISIC_2019_Test_Metadata.csv", 
 """weights = list(train_data.count_classes().values())
 weights.pop()  # Remove the Unknown class"""
 
-weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
-# make a validation set
-val_data, train_data = random_split(train_data, [2331, 23000])
 
 
-train_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
-val_set = torch.utils.data.DataLoader(val_data, batch_size=BATCH_SIZE, shuffle=True)
-test_set = torch.utils.data.DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True)
+def get_data_sets(plot=False):
+
+    indices = list(range(len(train_data)))
+    split = int(np.floor(0.85 * len(train_data)))
+    np.random.seed(1337)
+    np.random.shuffle(indices)
+    valid_idx, train_idx = indices[split:], indices[:split]
+    train_sampler = SubsetRandomSampler(train_idx)
+    valid_sampler = SubsetRandomSampler(valid_idx)
+
+    training_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=train_sampler)
+    valid_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=valid_sampler)
+    testing_set = torch.utils.data.DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True)
+
+    if plot:
+        helper.plot_set(training_set, data_plot, 0, 4)
+        helper.plot_set(valid_set, data_plot, 0, 4)
+
+    return training_set, valid_set, testing_set
 
 
-network = model.Classifier(image_size)
+train_set, val_set, test_set = get_data_sets()
+
+
+network = model.Classifier(image_size, dropout=0.5)
 network.to(device)
 
 optim = optimizer.Adam(network.parameters(), lr=0.001)
+
+weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
 
 class_weights = torch.FloatTensor(weights).to(device)
 loss_function = nn.CrossEntropyLoss(weight=class_weights)
@@ -249,7 +269,7 @@ def predict(data_set, data_loader):
     :return: a list of lists holding the networks predictions for each class
     """
 
-    print("Predicting on test set")
+    print("Predicting on Test set")
 
     batch = 0
     predictions = [['image', 'MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC', 'UNK']]
@@ -263,25 +283,23 @@ def predict(data_set, data_loader):
         label_batch = sample_batch['label']
 
         image_batch = image_batch.to(device)
-        soft_max = nn.Softmax()
+        soft_max = nn.Softmax(dim=1)
 
         outputs = soft_max(network(image_batch, dropout=False))
 
         for i in range (0, BATCH_SIZE):
             try:
-                answers = []
                 answers = outputs[i].tolist()
 
                 new_list = []
                 for answer in answers:
-                    answer = round(answer, 3)
                     new_list.append(answer)
 
                 if SOFTMAX:
-                    if max(answers) <= 0.7:
-                        new_list.append(1.0)
-                    else:
-                        new_list.append(0.0)
+                    new_list.append(1.0 - max(new_list))
+
+                for c in range(0, len(new_list)):
+                    new_list[c] = '{:.17f}'.format(new_list[c])
 
                 answers = new_list
 
