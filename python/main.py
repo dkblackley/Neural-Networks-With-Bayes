@@ -58,7 +58,7 @@ weights.pop()  # Remove the Unknown class"""
 def get_data_sets(plot=False):
 
     indices = list(range(len(train_data)))
-    split = int(np.floor(0.85 * len(train_data)))
+    split = int(np.floor(0.9 * len(train_data)))
     np.random.seed(1337)
     np.random.shuffle(indices)
     valid_idx, train_idx = indices[split:], indices[:split]
