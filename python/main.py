@@ -19,7 +19,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 15
+EPOCHS = 25
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
@@ -35,7 +35,7 @@ else:
 
 data_plot = data_plotting.DataPlotting()
 
-composed = transforms.Compose([
+composed_train = transforms.Compose([
                                 transforms.RandomVerticalFlip(),
                                 transforms.RandomHorizontalFlip(),
                                 # randomly crop out 10% of the total image
@@ -44,11 +44,25 @@ composed = transforms.Compose([
                                 data_loading.RandomCrop(image_size),
                                 transforms.ToTensor(),
                                 # call helper.get_mean_and_std(data_set) to get mean and std
-                                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+                                transforms.Normalize(mean=[0.6786, 0.5344, 0.5273], std=[0.2062, 0.1935, 0.2064])
                                ])
 
-train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed)
-test_data = data_loading.data_set("Test_meta_data/ISIC_2019_Test_Metadata.csv", "ISIC_2019_Test_Input", transforms=composed)
+composed_test = transforms.Compose([
+                                transforms.RandomVerticalFlip(),
+                                transforms.RandomHorizontalFlip(),
+                                # randomly crop out 10% of the total image
+                                transforms.Resize((int((image_size/100) * 10) + image_size,
+                                                   int((image_size/100) * 10) + image_size), Image.LANCZOS),
+                                data_loading.RandomCrop(image_size),
+                                transforms.ToTensor(),
+                                # call helper.get_mean_and_std(data_set) to get mean and std
+                                transforms.Normalize(mean=[0.6284, 0.5216, 0.5166], std=[0.2341, 0.2143, 0.2244])
+                               ])
+
+train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_train)
+test_data = data_loading.data_set("Test_meta_data/ISIC_2019_Test_Metadata.csv", "ISIC_2019_Test_Input", transforms=composed_test)
+
+
 
 """weights = list(train_data.count_classes().values())
 weights.pop()  # Remove the Unknown class"""
@@ -77,7 +91,6 @@ def get_data_sets(plot=False):
 
 
 train_set, val_set, test_set = get_data_sets()
-
 
 network = model.Classifier(image_size, dropout=0.5)
 network.to(device)
@@ -261,6 +274,38 @@ def test(testing_set, verbose=False):
 
     return accuracy, average_loss, confusion_matrix
 
+def softmax_pred(outputs, data_loader, i_batch):
+
+    predictions = []
+
+    for i in range(0, BATCH_SIZE):
+
+        try:
+            answers = outputs[i].tolist()
+
+            new_list = []
+            for answer in answers:
+                new_list.append(answer)
+
+            if SOFTMAX:
+              new_list.append(1.0 - max(new_list))
+
+            for c in range(0, len(new_list)):
+                new_list[c] = '{:.17f}'.format(new_list[c])
+
+            answers = new_list
+
+            answers.insert(0, data_loader.get_filename(i + (BATCH_SIZE * i_batch))[:-4])
+            predictions.append(answers)
+        # for the last batch, which won't be perfectly of size BATCH_SIZE
+        except Exception as e:
+            break
+
+    return predictions
+
+def monte_carlo():
+    pass
+
 def predict(data_set, data_loader):
     """
     Predicts on a data set without labels
@@ -287,27 +332,11 @@ def predict(data_set, data_loader):
 
         outputs = soft_max(network(image_batch, dropout=False))
 
-        for i in range (0, BATCH_SIZE):
-            try:
-                answers = outputs[i].tolist()
+        if SOFTMAX:
+            predictions.extend(softmax_pred(outputs, data_loader, i_batch))
+        elif MC_DROPOUT:
+            predictions.extend(monte_carlo())
 
-                new_list = []
-                for answer in answers:
-                    new_list.append(answer)
-
-                if SOFTMAX:
-                    new_list.append(1.0 - max(new_list))
-
-                for c in range(0, len(new_list)):
-                    new_list[c] = '{:.17f}'.format(new_list[c])
-
-                answers = new_list
-
-                answers.insert(0, data_loader.get_filename(i + (BATCH_SIZE * i_batch))[:-4])
-                predictions.append(answers)
-            # for the last batch, which won't be perfectly of size BATCH_SIZE
-            except Exception as e:
-                break
 
     return predictions
 
@@ -367,7 +396,7 @@ def confusion_array(arrays):
     return new_arrays
 
 
-train_net()
+#train_net()
 #helper.plot_samples(train_data, data_plot)
 
 network, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/")
