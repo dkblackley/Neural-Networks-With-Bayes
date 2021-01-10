@@ -5,6 +5,7 @@ calling other classes for plotting results of the network
 """
 
 import torch
+import sys
 import torch.optim as optimizer
 from torchvision import transforms
 from PIL import Image
@@ -19,12 +20,13 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 25
+EPOCHS = 0
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
-MC_DROPOUT = False
+MC_DROPOUT = True
+FORWARD_PASSES = 100
 BBB = False
 image_size = 224
 
@@ -72,7 +74,7 @@ weights.pop()  # Remove the Unknown class"""
 def get_data_sets(plot=False):
 
     indices = list(range(len(train_data)))
-    split = int(np.floor(0.9 * len(train_data)))
+    split = int(np.floor(0.85 * len(train_data)))
     np.random.seed(1337)
     np.random.shuffle(indices)
     valid_idx, train_idx = indices[split:], indices[:split]
@@ -81,16 +83,18 @@ def get_data_sets(plot=False):
 
     training_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=train_sampler)
     valid_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=valid_sampler)
-    testing_set = torch.utils.data.DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True)
+    # Don't shuffle the testing set for MC_DROPOUT
+    testing_set = torch.utils.data.DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
 
     if plot:
-        helper.plot_set(training_set, data_plot, 0, 4)
-        helper.plot_set(valid_set, data_plot, 0, 4)
+        helper.plot_set(training_set, data_plot, 0, 5)
+        helper.plot_set(valid_set, data_plot, 0, 5)
+        helper.plot_set(testing_set, data_plot, 0, 5)
 
     return training_set, valid_set, testing_set
 
 
-train_set, val_set, test_set = get_data_sets()
+train_set, val_set, test_set = get_data_sets(plot=True)
 
 network = model.Classifier(image_size, dropout=0.5)
 network.to(device)
@@ -227,9 +231,9 @@ def test(testing_set, verbose=False):
             label_batch = sample_batch['label']
 
             image_batch, label_batch = image_batch.to(device), label_batch.to(device)
-
-            outputs = network(image_batch, dropout=False)
-            loss = loss_function(outputs, label_batch)
+            with torch.no_grad():
+                outputs = network(image_batch, dropout=False)
+                loss = loss_function(outputs, label_batch)
 
             losses.append(loss.item())
 
@@ -303,8 +307,50 @@ def softmax_pred(outputs, data_loader, i_batch):
 
     return predictions
 
-def monte_carlo():
-    pass
+def monte_carlo(data_set, data_loader, forward_passes):
+    n_classes = 8
+    n_samples = len(data_loader)
+    soft_max = nn.Softmax(dim=1)
+    drop_predictions = np.empty((0, n_samples, n_classes))
+
+    for i in tqdm(range(forward_passes)):
+
+        print(f"\n\n Forward pass {i + 1} of {forward_passes}\n")
+        predictions = np.empty((0, n_classes))
+
+        with tqdm(total=len(data_set), position=0, leave=True) as pbar:
+            for i_batch, sample_batch in enumerate(tqdm((data_set), position=0, leave=True)):
+                image_batch = sample_batch['image']
+
+                with torch.no_grad():
+                    outputs = soft_max(network(image_batch, dropout=True))
+
+                for output in outputs:
+                    predictions = np.vstack((predictions, output.cpu().numpy()))
+
+
+        drop_predictions = np.vstack((drop_predictions, predictions[np.newaxis, :, :]))
+
+    mean = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
+    variance = np.var(drop_predictions, axis=0) # shape (n_samples, n_classes)
+
+    mean = mean.tolist()
+    variance = variance.tolist()
+
+    print("\nAttaching Filenames")
+    i = 0
+    for preds in mean:
+
+        preds.insert(0, data_loader.get_filename(i)[:-4])
+        preds.append(sum(variance[i]))
+
+        for c in range(1, len(preds)):
+            preds[c] = '{:.17f}'.format(preds[c])
+
+        i = i + 1
+
+    return mean
+
 
 def predict(data_set, data_loader):
     """
@@ -314,28 +360,27 @@ def predict(data_set, data_loader):
     :return: a list of lists holding the networks predictions for each class
     """
 
-    print("Predicting on Test set")
+    print("\nPredicting on Test set")
 
     batch = 0
-    predictions = [['image', 'MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC', 'UNK']]
 
-    for i_batch, sample_batch in enumerate(tqdm(data_set)):
+    if SOFTMAX:
+        predictions = [['image', 'MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC', 'UNK']]
+        for i_batch, sample_batch in enumerate(tqdm(data_set)):
 
-        batch += 1
+            batch += 1
 
+            image_batch = sample_batch['image']
 
-        image_batch = sample_batch['image']
-        label_batch = sample_batch['label']
-
-        image_batch = image_batch.to(device)
-        soft_max = nn.Softmax(dim=1)
-
-        outputs = soft_max(network(image_batch, dropout=False))
-
-        if SOFTMAX:
+            image_batch = image_batch.to(device)
+            soft_max = nn.Softmax(dim=1)
+            with torch.no_grad():
+                outputs = soft_max(network(image_batch, dropout=False))
             predictions.extend(softmax_pred(outputs, data_loader, i_batch))
-        elif MC_DROPOUT:
-            predictions.extend(monte_carlo())
+
+    elif MC_DROPOUT:
+        predictions = monte_carlo(data_set, data_loader, FORWARD_PASSES)
+        predictions.insert(0, ['image', 'MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC', 'UNK'])
 
 
     return predictions
@@ -348,28 +393,6 @@ def save_network(val_losses, train_losses, val_accuracies, train_accuracies):
     helper.write_csv(val_accuracies, "saved_model/val_accuracies.csv")
     helper.write_csv(train_accuracies, "saved_model/train_accuracies.csv")
 
-
-def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[], train_accuracies=[]):
-    """
-    Trains a network, saving the parameters and the losses/accuracies over time
-    :return:
-    """
-    starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(
-        starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies, verbose=True)
-
-    if not DEBUG:
-
-        _, __, confusion_matrix = test(val_set, verbose=True)
-        data_plot.plot_confusion(confusion_matrix, "Validation Set")
-        confusion_matrix = confusion_array(confusion_matrix)
-        data_plot.plot_confusion(confusion_matrix, "Validation Set (%)")
-
-        _, __, confusion_matrix = test(train_set, verbose=True)
-        data_plot.plot_confusion(confusion_matrix, "Training Set")
-        confusion_matrix = confusion_array(confusion_matrix)
-        data_plot.plot_confusion(confusion_matrix, "Training Set (%)")
-
-    return val_losses, train_losses, val_accuracies, train_accuracies
 
 def load_net(root_dir):
 
@@ -395,17 +418,41 @@ def confusion_array(arrays):
 
     return new_arrays
 
+def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[], train_accuracies=[]):
+    """
+    Trains a network, saving the parameters and the losses/accuracies over time
+    :return:
+    """
+    starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(
+        starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies, verbose=True)
+
+    if not DEBUG:
+
+        _, __, confusion_matrix = test(val_set, verbose=True)
+        data_plot.plot_confusion(confusion_matrix, "Validation Set")
+        confusion_matrix = confusion_array(confusion_matrix)
+        data_plot.plot_confusion(confusion_matrix, "Validation Set (%)")
+
+        _, __, confusion_matrix = test(train_set, verbose=True)
+        data_plot.plot_confusion(confusion_matrix, "Training Set")
+        confusion_matrix = confusion_array(confusion_matrix)
+        data_plot.plot_confusion(confusion_matrix, "Training Set (%)")
+
+    return val_losses, train_losses, val_accuracies, train_accuracies
 
 #train_net()
 #helper.plot_samples(train_data, data_plot)
 
 network, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/")
 
+#test(val_set, verbose=True)
+
 """train_net(starting_epoch=starting_epoch,
           val_losses=val_losses,
           train_losses=train_losses,
           val_accuracies=val_accuracies,
           train_accuracies=train_accuracies)"""
+
 
 predictions = predict(test_set, test_data)
 helper.write_rows(predictions, "saved_model/predictions.csv")

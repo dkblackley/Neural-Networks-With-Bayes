@@ -65,7 +65,7 @@ def get_mean_and_std(data_set):
     std = (channel_squared/len(data_set) - mean**2)**0.5
 
     print(f"\nMean: {mean}")
-    print(f"Standard Deviation: {std}")
+    print(f"\nStandard Deviation: {std}")
 
     return mean, std
 
