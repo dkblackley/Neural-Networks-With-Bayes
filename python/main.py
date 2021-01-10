@@ -25,7 +25,7 @@ DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
-MC_DROPOUT = True
+MC_DROPOUT = False
 FORWARD_PASSES = 100
 BBB = False
 image_size = 224
@@ -455,7 +455,11 @@ network, starting_epoch, val_losses, train_losses, val_accuracies, train_accurac
 
 
 predictions = predict(test_set, test_data)
-helper.write_rows(predictions, "saved_model/predictions.csv")
+
+if SOFTMAX:
+    helper.write_rows(predictions, "saved_model/softmax_predictions.csv")
+elif MC_DROPOUT:
+    helper.write_rows(predictions, "saved_model/dropout_predictions.csv")
 
 
 
