@@ -144,3 +144,7 @@ python/MNIST
 
 python/saved_model
 python/saved_models
+
+.idea/
+
+python/temp/
