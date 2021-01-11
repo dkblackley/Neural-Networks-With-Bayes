@@ -108,12 +108,21 @@ class DataPlotting:
         :param title: title for the plot
         :param array: a list of lists containing a representation of how the network predicted
         """
-        df_cm = pd.DataFrame(array, index=[i for i in list(self.LABELS.values())],
-                             columns=[i for i in list(self.LABELS.values())])
+
+        values = list(self.LABELS.values())
+        values.pop()
+
+        if isinstance(array[0][0], int):
+            form = 'd'
+        else:
+            form = 'g'
+
+        df_cm = pd.DataFrame(array, index=[i for i in list(values)],
+                             columns=[i for i in list(values)])
         plt.figure(figsize=(15, 10))
         sn.set(font_scale=1.4)  # for label size
-        sn.heatmap(df_cm, annot=True, annot_kws={"size": 16}, fmt='d') # font size
+        sn.heatmap(df_cm, annot=True, annot_kws={"size": 16}, fmt=form, cmap="YlGnBu") # font size
         plt.title(title)
 
-        plt.savefig("saved_model/confusion.png")
+        plt.savefig(f"saved_model/{title}.png")
         plt.show()

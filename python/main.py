@@ -220,8 +220,8 @@ def test(testing_set, verbose=False):
     losses = []
     confusion_matrix = []
 
-    for i in range(9):
-        confusion_matrix.append([0, 0, 0, 0, 0, 0, 0, 0, 0])
+    for i in range(8):
+        confusion_matrix.append([0, 0, 0, 0, 0, 0, 0, 0])
 
     print("\nTesting Data...")
 
@@ -243,7 +243,7 @@ def test(testing_set, verbose=False):
 
                 answer = torch.argmax(output)
                 real_answer = label_batch[index]
-                confusion_matrix[answer.item()][real_answer.item()] += 1
+                confusion_matrix[real_answer.item()][answer.item()] += 1
 
                 index += 1
 
@@ -382,6 +382,10 @@ def predict(data_set, data_loader):
         predictions = monte_carlo(data_set, data_loader, FORWARD_PASSES)
         predictions.insert(0, ['image', 'MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC', 'UNK'])
 
+    if SOFTMAX:
+        helper.write_rows(predictions, "saved_model/softmax_predictions.csv")
+    elif MC_DROPOUT:
+        helper.write_rows(predictions, "saved_model/dropout_predictions.csv")
 
     return predictions
 
@@ -412,7 +416,7 @@ def confusion_array(arrays):
         new_array = []
 
         for item in array:
-            new_array.append(int((item / (sum(array) + 1)) * 100))
+            new_array.append(round(item / (sum(array) + 1), 4))
 
         new_arrays.append(new_array)
 
@@ -431,12 +435,12 @@ def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[
         _, __, confusion_matrix = test(val_set, verbose=True)
         data_plot.plot_confusion(confusion_matrix, "Validation Set")
         confusion_matrix = confusion_array(confusion_matrix)
-        data_plot.plot_confusion(confusion_matrix, "Validation Set (%)")
+        data_plot.plot_confusion(confusion_matrix, "Validation Set Normalized")
 
         _, __, confusion_matrix = test(train_set, verbose=True)
         data_plot.plot_confusion(confusion_matrix, "Training Set")
         confusion_matrix = confusion_array(confusion_matrix)
-        data_plot.plot_confusion(confusion_matrix, "Training Set (%)")
+        data_plot.plot_confusion(confusion_matrix, "Training Set Normalized")
 
     return val_losses, train_losses, val_accuracies, train_accuracies
 
@@ -447,19 +451,16 @@ network, starting_epoch, val_losses, train_losses, val_accuracies, train_accurac
 
 #test(val_set, verbose=True)
 
-"""train_net(starting_epoch=starting_epoch,
+train_net(starting_epoch=starting_epoch,
           val_losses=val_losses,
           train_losses=train_losses,
           val_accuracies=val_accuracies,
-          train_accuracies=train_accuracies)"""
+          train_accuracies=train_accuracies)
 
 
-predictions = predict(test_set, test_data)
+#predictions = predict(test_set, test_data)
 
-if SOFTMAX:
-    helper.write_rows(predictions, "saved_model/softmax_predictions.csv")
-elif MC_DROPOUT:
-    helper.write_rows(predictions, "saved_model/dropout_predictions.csv")
+
 
 
 
