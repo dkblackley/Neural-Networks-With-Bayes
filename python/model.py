@@ -4,6 +4,7 @@ File responsible for holding the model, uses efficientnet
 import torch
 import torch.nn as nn
 from torch.nn import functional as TF
+import math
 from efficientnet_pytorch import EfficientNet
 
 
@@ -56,3 +57,26 @@ class Classifier(nn.Module):
 
         output = self.output_layer(output)
         return output
+
+# Credit to https://www.nitarshan.com/bayes-by-backprop/, Used to create code and follow through the steps of BBB paper
+class GaussianDistribution(object):
+
+    def __init__(self, mu, rho):
+        super.__init__()
+        self.mu = mu
+        self.rho = rho
+        self.normal = torch.distributions.Normal(0, 1)
+
+    @property
+    def sigma(self):
+        return torch.log1p(torch.exp(self.rho))
+
+    def sample_distribution(self):
+        e = self.normal.sample(self.rho.size())
+
+        return self.mu + self.sigma * e
+
+    def log_probability(self, input):
+        return  (-math.log(math.sqrt(2 * math.pi))
+                 - torch.log(self.sigma)
+                 - ((input - self.mu ** 2) / (2 * self.sigma ** 2)).sum())
