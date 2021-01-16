@@ -9,7 +9,7 @@ from torchvision import transforms
 import seaborn as sn
 import pandas as pd
 
-# LABELS = {'MEL': 0, 'NV': 1, 'BCC': 2, 'AK': 3, 'BKL': 4, 'DF': 5, 'VASC': 6, 'SCC': 7, 'UNK': 8}
+# LABELS = {'MEL': 0, 'NV': 1, 'BCC': 2, 'AK': 3, 'BKL': 4, 'DF': 5, 'VASC': 6, 'SCC': 7}
 
 
 class DataPlotting:
@@ -126,3 +126,13 @@ class DataPlotting:
 
         plt.savefig(f"saved_model/{title}.png")
         plt.show()
+
+    def plot_risk_coverage(self, array, title):
+        """
+        Plots a risk coverage curve, showing risk in % on the y-axis showing the risk that the predicitions might be
+        wrong and coverage % on the x-axis that plots the % of the dataset that has been included to get that risk
+        :param array: list of accuracies, total length of the list should be the total length of the dataset.
+        :param title: Title of the plot
+        :return:
+        """
+        pass

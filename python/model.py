@@ -24,8 +24,7 @@ class Classifier(nn.Module):
         with torch.no_grad():
 
             temp_input = torch.zeros(1, 3, image_size, image_size)
-
-        encoder_size = self.model.extract_features(temp_input).shape[1]
+            encoder_size = self.model.extract_features(temp_input).shape[1]
 
         # Initialises the classification head for generating predictions.
 

@@ -9,7 +9,7 @@ import sys
 import torch.optim as optimizer
 from torchvision import transforms
 from PIL import Image
-from torch.utils.data import random_split, WeightedRandomSampler, SubsetRandomSampler
+from torch.utils.data import random_split, SubsetRandomSampler, SequentialSampler
 from sklearn.model_selection import train_test_split
 import numpy as np
 import data_loading
@@ -20,7 +20,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 0
+EPOCHS = 20
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
@@ -37,32 +37,29 @@ else:
 
 data_plot = data_plotting.DataPlotting()
 
+# One percent of the overall image size
+image_percent = image_size/100
+image_five_percent = int(image_percent * 5)
+
 composed_train = transforms.Compose([
+                                # randomly crop out 5% of the total image
+                                transforms.Resize((image_size + image_five_percent, image_size + image_five_percent),  Image.LANCZOS),
                                 transforms.RandomVerticalFlip(),
                                 transforms.RandomHorizontalFlip(),
-                                # randomly crop out 10% of the total image
-                                transforms.Resize((int((image_size/100) * 10) + image_size,
-                                                   int((image_size/100) * 10) + image_size), Image.LANCZOS),
-                                data_loading.RandomCrop(image_size),
+                                # move and shear the image by 5% of its total size
+                                transforms.RandomAffine(0,
+                                                        translate=(image_five_percent/image_size, image_five_percent/image_size),
+                                                        shear=image_five_percent/image_size),
+                                data_loading.RandomCrop((image_size,
+                                                        image_size)),
+
                                 transforms.ToTensor(),
                                 # call helper.get_mean_and_std(data_set) to get mean and std
                                 transforms.Normalize(mean=[0.6786, 0.5344, 0.5273], std=[0.2062, 0.1935, 0.2064])
                                ])
 
-composed_test = transforms.Compose([
-                                transforms.RandomVerticalFlip(),
-                                transforms.RandomHorizontalFlip(),
-                                # randomly crop out 10% of the total image
-                                transforms.Resize((int((image_size/100) * 10) + image_size,
-                                                   int((image_size/100) * 10) + image_size), Image.LANCZOS),
-                                data_loading.RandomCrop(image_size),
-                                transforms.ToTensor(),
-                                # call helper.get_mean_and_std(data_set) to get mean and std
-                                transforms.Normalize(mean=[0.6284, 0.5216, 0.5166], std=[0.2341, 0.2143, 0.2244])
-                               ])
-
 train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_train)
-test_data = data_loading.data_set("Test_meta_data/ISIC_2019_Test_Metadata.csv", "ISIC_2019_Test_Input", transforms=composed_test)
+#test_data = data_loading.data_set("Test_meta_data/ISIC_2019_Test_Metadata.csv", "ISIC_2019_Test_Input", transforms=composed_test)
 
 
 
@@ -74,17 +71,30 @@ weights.pop()  # Remove the Unknown class"""
 def get_data_sets(plot=False):
 
     indices = list(range(len(train_data)))
-    split = int(np.floor(0.85 * len(train_data)))
+    split_train = int(np.floor(0.7 * len(train_data)))
+    split_val = int(np.floor(0.33 * split_train))
+
     np.random.seed(1337)
     np.random.shuffle(indices)
-    valid_idx, train_idx = indices[split:], indices[:split]
+
+    temp_idx, train_idx = indices[split_train:], indices[:split_train]
+    valid_idx, test_idx = temp_idx[split_val:], temp_idx[:split_val]
+
+    if (bool(set(test_idx) & set(valid_idx))):
+        print("HERE")
+    if (bool(set(test_idx) & set(train_idx))):
+        print("HERE")
+    if (bool(set(train_idx) & set(valid_idx))):
+        print("HERE")
+
     train_sampler = SubsetRandomSampler(train_idx)
     valid_sampler = SubsetRandomSampler(valid_idx)
+    # Don't shuffle the testing set for MC_DROPOUT
+    test_sampler = SequentialSampler(test_idx)
 
     training_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=train_sampler)
     valid_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=valid_sampler)
-    # Don't shuffle the testing set for MC_DROPOUT
-    testing_set = torch.utils.data.DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
+    testing_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=test_sampler)
 
     if plot:
         helper.plot_set(training_set, data_plot, 0, 5)
@@ -96,6 +106,7 @@ def get_data_sets(plot=False):
 
 train_set, val_set, test_set = get_data_sets(plot=True)
 
+
 network = model.Classifier(image_size, dropout=0.5)
 network.to(device)
 
@@ -103,7 +114,7 @@ optim = optimizer.Adam(network.parameters(), lr=0.001)
 
 weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
 
-class_weights = torch.FloatTensor(weights).to(device)
+class_weights = torch.Tensor(weights).to(device)
 loss_function = nn.CrossEntropyLoss(weight=class_weights)
 
 
@@ -444,18 +455,18 @@ def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[
 
     return val_losses, train_losses, val_accuracies, train_accuracies
 
-#train_net()
+train_net()
 #helper.plot_samples(train_data, data_plot)
 
 network, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/")
 
 #test(val_set, verbose=True)
 
-train_net(starting_epoch=starting_epoch,
+"""train_net(starting_epoch=starting_epoch,
           val_losses=val_losses,
           train_losses=train_losses,
           val_accuracies=val_accuracies,
-          train_accuracies=train_accuracies)
+          train_accuracies=train_accuracies)"""
 
 
 #predictions = predict(test_set, test_data)

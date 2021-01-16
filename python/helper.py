@@ -8,7 +8,7 @@ import model
 from tqdm import tqdm
 import csv
 
-LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
+LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
 
 def plot_images(data_plot, images, stop):
     for i in range(len(images)):
@@ -96,6 +96,32 @@ def write_csv(list_to_write, filename):
     with open(filename, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(list_to_write)
+
+def count_classes(dataset, batch_size):
+    LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
+    labels_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
+    print("Counting labels")
+
+    for i_batch, sample_batch in enumerate(tqdm(dataset)):
+        labels_batch = sample_batch['label']
+        for i in range(len(labels_batch)):
+            label = labels_batch[i].item()
+            label = LABELS[label]
+            try:
+                labels_count[label] += 1
+            except Exception as e:
+                continue
+
+    print(labels_count)
+
+    for label, count in labels_count.items():
+        print(f"{label}: {round(count / (len(dataset) * batch_size) * 100, 3)}%")
+    temp = labels_count.values()
+    temp = list(temp)
+    temp = sum(temp)
+    print(f"Total number of samples in train set: {temp}")
+
+    return labels_count
 
 def write_rows(list_to_write, filename):
     """
