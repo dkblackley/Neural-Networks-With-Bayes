@@ -127,7 +127,7 @@ class DataPlotting:
         plt.savefig(f"saved_model/{title}.png")
         plt.show()
 
-    def plot_risk_coverage(self, arrays, title):
+    def plot_risk_coverage(self, predictions_mc, predictions_softmax, title):
         """
         Plots a risk coverage curve, showing risk in % on the y-axis showing the risk that the predicitions might be
         wrong and coverage % on the x-axis that plots the % of the dataset that has been included to get that risk
@@ -136,7 +136,24 @@ class DataPlotting:
         :param title: Title of the plot
         :return:
         """
-        entropies = []
-        for array in arrays:
-            entropies.append(array.pop())
-        
+        mc_entropies = []
+        sm_entropies = []
+        coverage = []
+        i = 0
+        for array in predictions_mc:
+            i = i + 1
+            mc_entropies.append(array.pop())
+            coverage.append(i/len(array))
+
+        for array in predictions_softmax:
+            sm_entropies.append(array.pop())
+
+        plt.plot(coverage, mc_entropies, label="MC Dropout")
+        plt.plot(coverage, sm_entropies, label="MC Dropout")
+        plt.title(title)
+        plt.xlabel("Coverage")
+        plt.ylabel("Risk")
+        plt.legend(loc='best')
+
+        plt.savefig("saved_model/risk_curve.png")
+        plt.show()
