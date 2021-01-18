@@ -5,8 +5,10 @@ for the ISIC2019 Challenge and also predictions on already known images
 
 import torch
 import torch.nn as nn
+import sys
 import numpy as np
 from tqdm import tqdm
+from scipy.stats import entropy
 import helper
 
 def softmax_pred_ISIC(outputs, data_loader, i_batch, batch_size):
@@ -92,13 +94,9 @@ def predict_ISIC(data_set, data_loader, network, device, forward_passes, softmax
 
     print("\nPredicting on ISIC2019 Test set")
 
-    batch = 0
-
     if softmax:
         predictions = [['image', 'MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC', 'UNK']]
         for i_batch, sample_batch in enumerate(tqdm(data_set)):
-
-            batch += 1
 
             image_batch = sample_batch['image']
 
@@ -119,17 +117,97 @@ def predict_ISIC(data_set, data_loader, network, device, forward_passes, softmax
 
     return predictions
 
-def monte_carlo():
-    pass
+def softmax_pred(data_set, network, n_classes=8):
+
+    predictions = np.empty(0, n_classes)
+    soft_max = nn.Softmax(dim=1)
+
+    for i_batch, sample_batch in enumerate(tqdm(data_set)):
+        image_batch = sample_batch['image']
+        with torch.no_grad():
+            outputs = soft_max(network(image_batch, dropout=True))
+
+        for output in outputs:
+            predictions = np.vstack((predictions, output.cpu().numpy()))
+
+    epsilon = sys.float_info.min
+    entropies = entropies = -np.sum(predictions*np.log(predictions + epsilon), axis=-1)
+
+    predicions = predictions.tolist()
+    entropies = entropies.tolist()
+
+    for entropy in entropies:
+        entropy = (entropy - min(entropies)) / (max(entropies) - min(entropies))
+
+    i = 0
+    for preds in predicions:
+
+        preds.append(entropies[i])
+
+        for c in range(1, len(preds)):
+            preds[c] = '{:.17f}'.format(preds[c])
+
+        i = i + 1
+
+    return predictions
 
 
-def predict(test_set):
+def monte_carlo(data_set, forward_passes, network, n_samples, n_classes=8):
 
-    print("Printing on Test set")
+    soft_max = nn.Softmax(dim=1)
+    drop_predictions = np.empty((0, n_samples, n_classes))
+
+    for i in tqdm(range(forward_passes)):
+
+        print(f"\n\n Forward pass {i + 1} of {forward_passes}\n")
+        predictions = np.empty((0, n_classes))
+
+        # Tqdm tends to mess up when inside another tqdm, do this to fix it.
+        with tqdm(total=len(data_set), position=0, leave=True) as pbar:
+            for i_batch, sample_batch in enumerate(tqdm((data_set), position=0, leave=True)):
+                image_batch = sample_batch['image']
+
+                with torch.no_grad():
+                    outputs = soft_max(network(image_batch, dropout=True))
+
+                for output in outputs:
+                    predictions = np.vstack((predictions, output.cpu().numpy()))
+
+        drop_predictions = np.vstack((drop_predictions, predictions[np.newaxis, :, :]))
+
+    mean = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
+
+    epsilon = sys.float_info.min
+    entropies = -np.sum(mean*np.log(mean + epsilon), axis=-1)  # shape (n_samples, n_classes)
+
+    mean = mean.tolist()
+    entropies = entropies.tolist()
+
+    for entropy in entropies:
+        entropy = (entropy - min(entropies))/(max(entropies) - min(entropies))
+
+    i = 0
+    for preds in mean:
+
+        preds.append(entropies[i])
+
+        for c in range(1, len(preds)):
+            preds[c] = '{:.17f}'.format(preds[c])
+
+        i = i + 1
+
+    return mean
+
+
+def predict(test_set, monte_carlo=False, softmax=False):
+
+    print("Predicting on Test set")
 
     predictions = []
 
     if monte_carlo:
-        monte_carlo()
+        predictions = monte_carlo()
+    elif softmax:
+        predictions = softmax_pred()
 
     return predictions
