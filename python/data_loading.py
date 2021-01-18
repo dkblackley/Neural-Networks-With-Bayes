@@ -182,6 +182,51 @@ class RandomCrop(object):
         return image
 
 
+class RemoveBorders(object):
+
+    def __init__(self, image_size, tolerance=0):
+        self.tol = tolerance
+        self.image_size = image_size
+        self.index = 0
+
+    def __call__(self, img):
+        """
+        Taken and adapted from https://codereview.stackexchange.com/questions/132914/crop-black-border-of-image-using-numpy
+        :param image: Image to be cropped
+        :return: the image with black borders removed
+        """
+
+        img.show()
+
+        image = np.asarray(img)
+        self.index = self.index + 1
+
+        # Delete last 5 rows and columns
+        image = np.delete(image, np.s_[self.image_size - 5:], 1)
+        image = np.delete(image, np.s_[self.image_size - 5:], 0)
+
+        image = np.delete(image, np.s_[:5], 1)
+        image = np.delete(image, np.s_[:5], 0)
+
+        prev_size = np.sum(image)
+
+        mask = image > self.tol
+        if image.ndim == 3:
+            mask = mask.all(2)
+        mask0, mask1 = mask.any(0), mask.any(1)
+        image = image[np.ix_(mask0, mask1)]
+
+        new_size = np.sum(image)
+
+        image = Image.fromarray(image, 'RGB')
+
+        image.show()
+
+        if prev_size == new_size:
+            return img
+        else:
+            return image
+
 # Currently Unused
 class RandomRotation(object):
     """

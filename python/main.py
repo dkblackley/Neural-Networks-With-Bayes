@@ -20,7 +20,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 20
+EPOCHS = 25
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
@@ -42,21 +42,35 @@ image_percent = image_size/100
 image_five_percent = int(image_percent * 5)
 
 composed_train = transforms.Compose([
-                                # randomly crop out 5% of the total image
-                                transforms.Resize((image_size + image_five_percent, image_size + image_five_percent),  Image.LANCZOS),
+                                transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0)),
+                                transforms.ColorJitter(brightness=0.2),
                                 transforms.RandomVerticalFlip(),
                                 transforms.RandomHorizontalFlip(),
-                                # move and shear the image by 5% of its total size
-                                transforms.RandomAffine(0,
-                                                        translate=(image_five_percent/image_size, image_five_percent/image_size),
-                                                        shear=image_five_percent/image_size),
-                                data_loading.RandomCrop((image_size,
-                                                        image_size)),
+                                transforms.RandomAffine(0, shear=image_percent/image_size),
+                                transforms.ToTensor(),
+                                transforms.RandomErasing(p=0.2, scale=(image_percent/image_size/10, image_percent/image_size/5)),
+                                transforms.RandomErasing(p=0.2, scale=(image_percent/image_size/10, image_percent/image_size/5)),
+                                transforms.RandomErasing(p=0.2, scale=(image_percent/image_size/10, image_percent/image_size/5)),
+                                #transforms.RandomErasing(p=0.25, scale=(image_percent/image_size/10, image_percent/image_size/5)),
+                                # call helper.get_mean_and_std(data_set) to get mean and std
+                                transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
+                               ])
 
+"""composed_train = transforms.Compose([
+                                transforms.Resize((image_size, image_size), Image.LANCZOS),
+                                transforms.ToTensor()
+                               ])"""
+
+"""composed_test = transforms.Compose([
+                                transforms.Resize(image_size),
+                                transforms.ColorJitter(brightness=0.2),
+                                transforms.RandomVerticalFlip(),
+                                transforms.RandomHorizontalFlip(),
+                                transforms.RandomAffine(0, shear=image_percent/image_size),
                                 transforms.ToTensor(),
                                 # call helper.get_mean_and_std(data_set) to get mean and std
                                 transforms.Normalize(mean=[0.6786, 0.5344, 0.5273], std=[0.2062, 0.1935, 0.2064])
-                               ])
+                               ])"""
 
 train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_train)
 #test_data = data_loading.data_set("Test_meta_data/ISIC_2019_Test_Metadata.csv", "ISIC_2019_Test_Input", transforms=composed_test)
@@ -106,15 +120,23 @@ def get_data_sets(plot=False):
 
 train_set, val_set, test_set = get_data_sets(plot=True)
 
-
 network = model.Classifier(image_size, dropout=0.5)
 network.to(device)
 
 optim = optimizer.Adam(network.parameters(), lr=0.001)
 
-weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
+#weights = list(helper.count_classes(train_set, BATCH_SIZE).values())
+weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
 
-class_weights = torch.Tensor(weights).to(device)
+new_weights = []
+index = 0
+for weight in weights:
+    new_weights.append(sum(weights)/(8 * weight))
+    index = index + 1
+
+#weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
+
+class_weights = torch.Tensor(new_weights).to(device)
 loss_function = nn.CrossEntropyLoss(weight=class_weights)
 
 
@@ -438,6 +460,8 @@ def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[
     Trains a network, saving the parameters and the losses/accuracies over time
     :return:
     """
+    # Make sure the model is in training mode
+    network.train()
     starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(
         starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies, verbose=True)
 
@@ -462,11 +486,11 @@ network, starting_epoch, val_losses, train_losses, val_accuracies, train_accurac
 
 #test(val_set, verbose=True)
 
-"""train_net(starting_epoch=starting_epoch,
+train_net(starting_epoch=starting_epoch,
           val_losses=val_losses,
           train_losses=train_losses,
           val_accuracies=val_accuracies,
-          train_accuracies=train_accuracies)"""
+          train_accuracies=train_accuracies)
 
 
 #predictions = predict(test_set, test_data)
