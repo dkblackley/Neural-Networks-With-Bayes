@@ -46,14 +46,15 @@ composed_train = transforms.Compose([
                                 transforms.ColorJitter(brightness=0.2),
                                 transforms.RandomVerticalFlip(),
                                 transforms.RandomHorizontalFlip(),
-                                transforms.RandomAffine(0, shear=image_percent/image_size),
+                                # Skew the image by 1% of its total size
+                                transforms.RandomAffine(0, shear=0.01),
                                 transforms.ToTensor(),
-                                transforms.RandomErasing(p=0.2, scale=(image_percent/image_size/10, image_percent/image_size/5)),
-                                transforms.RandomErasing(p=0.2, scale=(image_percent/image_size/10, image_percent/image_size/5)),
-                                transforms.RandomErasing(p=0.2, scale=(image_percent/image_size/10, image_percent/image_size/5)),
+                                transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
+                                transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
+                                transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
                                 #transforms.RandomErasing(p=0.25, scale=(image_percent/image_size/10, image_percent/image_size/5)),
                                 # call helper.get_mean_and_std(data_set) to get mean and std
-                                transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
+                                #transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
                                ])
 
 """composed_train = transforms.Compose([
