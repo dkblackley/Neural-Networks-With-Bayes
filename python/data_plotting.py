@@ -127,12 +127,16 @@ class DataPlotting:
         plt.savefig(f"saved_model/{title}.png")
         plt.show()
 
-    def plot_risk_coverage(self, array, title):
+    def plot_risk_coverage(self, arrays, title):
         """
         Plots a risk coverage curve, showing risk in % on the y-axis showing the risk that the predicitions might be
         wrong and coverage % on the x-axis that plots the % of the dataset that has been included to get that risk
-        :param array: list of accuracies, total length of the list should be the total length of the dataset.
+        :param array: list of accuracies, should be a list containing all predicitions on each class and also the
+        entropy value as the last item in the array.
         :param title: Title of the plot
         :return:
         """
-        pass
+        entropies = []
+        for array in arrays:
+            entropies.append(array.pop())
+        
