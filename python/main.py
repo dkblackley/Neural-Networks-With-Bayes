@@ -5,12 +5,9 @@ calling other classes for plotting results of the network
 """
 
 import torch
-import sys
 import torch.optim as optimizer
 from torchvision import transforms
-from PIL import Image
 from torch.utils.data import random_split, SubsetRandomSampler, SequentialSampler
-from sklearn.model_selection import train_test_split
 import numpy as np
 import data_loading
 import data_plotting
@@ -49,6 +46,7 @@ composed_train = transforms.Compose([
                                 # Skew the image by 1% of its total size
                                 transforms.RandomAffine(0, shear=0.01),
                                 transforms.ToTensor(),
+                                transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
@@ -312,118 +310,6 @@ def test(testing_set, verbose=False):
 
     return accuracy, average_loss, confusion_matrix
 
-def softmax_pred(outputs, data_loader, i_batch):
-
-    predictions = []
-
-    for i in range(0, BATCH_SIZE):
-
-        try:
-            answers = outputs[i].tolist()
-
-            new_list = []
-            for answer in answers:
-                new_list.append(answer)
-
-            if SOFTMAX:
-              new_list.append(1.0 - max(new_list))
-
-            for c in range(0, len(new_list)):
-                new_list[c] = '{:.17f}'.format(new_list[c])
-
-            answers = new_list
-
-            answers.insert(0, data_loader.get_filename(i + (BATCH_SIZE * i_batch))[:-4])
-            predictions.append(answers)
-        # for the last batch, which won't be perfectly of size BATCH_SIZE
-        except Exception as e:
-            break
-
-    return predictions
-
-def monte_carlo(data_set, data_loader, forward_passes):
-    n_classes = 8
-    n_samples = len(data_loader)
-    soft_max = nn.Softmax(dim=1)
-    drop_predictions = np.empty((0, n_samples, n_classes))
-
-    for i in tqdm(range(forward_passes)):
-
-        print(f"\n\n Forward pass {i + 1} of {forward_passes}\n")
-        predictions = np.empty((0, n_classes))
-
-        with tqdm(total=len(data_set), position=0, leave=True) as pbar:
-            for i_batch, sample_batch in enumerate(tqdm((data_set), position=0, leave=True)):
-                image_batch = sample_batch['image']
-
-                with torch.no_grad():
-                    outputs = soft_max(network(image_batch, dropout=True))
-
-                for output in outputs:
-                    predictions = np.vstack((predictions, output.cpu().numpy()))
-
-
-        drop_predictions = np.vstack((drop_predictions, predictions[np.newaxis, :, :]))
-
-    mean = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
-    variance = np.var(drop_predictions, axis=0) # shape (n_samples, n_classes)
-
-    mean = mean.tolist()
-    variance = variance.tolist()
-
-    print("\nAttaching Filenames")
-    i = 0
-    for preds in mean:
-
-        preds.insert(0, data_loader.get_filename(i)[:-4])
-        preds.append(sum(variance[i]))
-
-        for c in range(1, len(preds)):
-            preds[c] = '{:.17f}'.format(preds[c])
-
-        i = i + 1
-
-    return mean
-
-
-def predict(data_set, data_loader):
-    """
-    Predicts on a data set without labels
-    :param data_set: data set to predict on
-    :param data_loader: data loader to get the filename from
-    :return: a list of lists holding the networks predictions for each class
-    """
-
-    print("\nPredicting on Test set")
-
-    batch = 0
-
-    if SOFTMAX:
-        predictions = [['image', 'MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC', 'UNK']]
-        for i_batch, sample_batch in enumerate(tqdm(data_set)):
-
-            batch += 1
-
-            image_batch = sample_batch['image']
-
-            image_batch = image_batch.to(device)
-            soft_max = nn.Softmax(dim=1)
-            with torch.no_grad():
-                outputs = soft_max(network(image_batch, dropout=False))
-            predictions.extend(softmax_pred(outputs, data_loader, i_batch))
-
-    elif MC_DROPOUT:
-        predictions = monte_carlo(data_set, data_loader, FORWARD_PASSES)
-        predictions.insert(0, ['image', 'MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC', 'UNK'])
-
-    if SOFTMAX:
-        helper.write_rows(predictions, "saved_model/softmax_predictions.csv")
-    elif MC_DROPOUT:
-        helper.write_rows(predictions, "saved_model/dropout_predictions.csv")
-
-    return predictions
-
-
 def save_network(val_losses, train_losses, val_accuracies, train_accuracies):
     helper.save_net(network, "saved_model/model_parameters")
     helper.write_csv(val_losses, "saved_model/val_losses.csv")
@@ -480,21 +366,21 @@ def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[
 
     return val_losses, train_losses, val_accuracies, train_accuracies
 
-train_net()
+#train_net()
 #helper.plot_samples(train_data, data_plot)
 
 network, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/")
 
 #test(val_set, verbose=True)
 
-train_net(starting_epoch=starting_epoch,
+"""train_net(starting_epoch=starting_epoch,
           val_losses=val_losses,
           train_losses=train_losses,
           val_accuracies=val_accuracies,
-          train_accuracies=train_accuracies)
+          train_accuracies=train_accuracies)"""
 
 
-#predictions = predict(test_set, test_data)
+predictions = predict(test_set)
 
 
 
