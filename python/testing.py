@@ -117,7 +117,7 @@ def predict_ISIC(data_set, data_loader, network, device, forward_passes, softmax
 
     return predictions
 
-def softmax_pred(data_set, network, n_classes=8):
+def softmax_pred(data_set, network, n_classes):
 
     predictions = np.empty(0, n_classes)
     soft_max = nn.Softmax(dim=1)
@@ -152,7 +152,7 @@ def softmax_pred(data_set, network, n_classes=8):
     return predictions
 
 
-def monte_carlo(data_set, forward_passes, network, n_samples, n_classes=8):
+def monte_carlo(data_set, forward_passes, network, n_samples, n_classes):
 
     soft_max = nn.Softmax(dim=1)
     drop_predictions = np.empty((0, n_samples, n_classes))
@@ -199,15 +199,18 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes=8):
     return mean
 
 
-def predict(test_set, monte_carlo=False, softmax=False):
+def predict(test_set, network, num_samples, n_classes=8, mc_dropout=False, forward_passes=100, softmax=False):
 
     print("Predicting on Test set")
 
+    # Make sure network is in eval mode
+    network.eval()
+
     predictions = []
 
-    if monte_carlo:
-        predictions = monte_carlo()
+    if mc_dropout:
+        predictions = monte_carlo(test_set, forward_passes, network, num_samples, n_classes)
     elif softmax:
-        predictions = softmax_pred()
+        predictions = softmax_pred(test_set, network, n_classes)
 
     return predictions

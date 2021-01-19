@@ -11,6 +11,7 @@ from torch.utils.data import random_split, SubsetRandomSampler, SequentialSample
 import numpy as np
 import data_loading
 import data_plotting
+import testing
 import helper
 import model
 import torch.nn as nn
@@ -395,7 +396,7 @@ train_net(starting_epoch=starting_epoch,
           train_accuracies=train_accuracies)
 
 
-#predictions = predict(test_set)
+predictions = testing.predict(test_set)
 
 
 
