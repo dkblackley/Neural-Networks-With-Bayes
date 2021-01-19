@@ -17,8 +17,8 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 2
-DEBUG = True  # Toggle this to only run for 1% of the training data
+EPOCHS = 3
+DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
@@ -157,6 +157,9 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
 
     for epoch in range(current_epoch, EPOCHS + current_epoch):
 
+        # Make sure network is in train mode
+        network.train()
+
         losses = []
         correct = 0
         total = 0
@@ -244,6 +247,10 @@ def test(testing_set, verbose=False):
     :return: accuracy of network on dataset, loss of network and also a confusion matrix in the
     form of a list of lists
     """
+
+    # Make sure network is in eval mode
+    network.eval()
+
     correct = 0
     total = 0
     incorrect = 0
@@ -288,6 +295,9 @@ def test(testing_set, verbose=False):
                     incorrect_count[label] += 1
                     incorrect += 1
                 total += 1
+
+            if total >= BATCH_SIZE * 2 and DEBUG:
+                break
 
     average_loss = (sum(losses) / len(losses))
     accuracy = (correct / total) * 100
@@ -347,8 +357,6 @@ def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[
     Trains a network, saving the parameters and the losses/accuracies over time
     :return:
     """
-    # Make sure the model is in training mode
-    network.train()
     starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(
         starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies, verbose=True)
 
@@ -376,7 +384,7 @@ train_net()
 
 network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/")
 
-EPOCHS = 10
+#EPOCHS = 10
 
 #test(val_set, verbose=True)
 
