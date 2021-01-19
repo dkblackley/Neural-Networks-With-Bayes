@@ -7,6 +7,7 @@ import torch
 import model
 from tqdm import tqdm
 import csv
+import torch.optim as optimizer
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
 
@@ -35,15 +36,30 @@ def plot_set(data_set, data_plot, stop, batch_stop):
             break
 
 
-def save_net(network, PATH):
-    torch.save(network.state_dict(), PATH)
+def save_net(net, optim, PATH):
+    states = {'network': net.state_dict(),
+             'optimizer': optim.state_dict()}
+    torch.save(states, PATH)
 
+def change_to_device(network, optim, device):
+    network = network.to(device)
+
+    for state in optim.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.to(device)
+
+    return network, optim
 
 def load_net(PATH, image_size):
     net = model.Classifier(image_size)
-    net.load_state_dict(torch.load(PATH))
-    net.eval()
-    return net
+    optim = optimizer.Adam(net.parameters(), lr=0.001)
+    states = torch.load(PATH)
+
+    optim.load_state_dict(states['optimizer'])
+    net.load_state_dict(states['network'])
+    net.train()
+    return net, optim
 
 def get_mean_and_std(data_set):
     """

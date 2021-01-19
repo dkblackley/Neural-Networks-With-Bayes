@@ -17,8 +17,8 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 25
-DEBUG = False  # Toggle this to only run for 1% of the training data
+EPOCHS = 2
+DEBUG = True  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
@@ -52,7 +52,7 @@ composed_train = transforms.Compose([
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
                                 #transforms.RandomErasing(p=0.25, scale=(image_percent/image_size/10, image_percent/image_size/5)),
                                 # call helper.get_mean_and_std(data_set) to get mean and std
-                                #transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
+                                transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
                                ])
 
 """composed_train = transforms.Compose([
@@ -231,7 +231,7 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
         data_plot.plot_loss(intervals, val_losses, train_losses)
         data_plot.plot_validation(intervals, val_accuracy, train_accuracy)
 
-        save_network(val_losses, train_losses, val_accuracy, train_accuracy)
+        save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy)
 
     return intervals, val_losses, train_losses, val_accuracy, train_accuracy
 
@@ -310,8 +310,8 @@ def test(testing_set, verbose=False):
 
     return accuracy, average_loss, confusion_matrix
 
-def save_network(val_losses, train_losses, val_accuracies, train_accuracies):
-    helper.save_net(network, "saved_model/model_parameters")
+def save_network(optim, val_losses, train_losses, val_accuracies, train_accuracies):
+    helper.save_net(network, optim, "saved_model/model_parameters")
     helper.write_csv(val_losses, "saved_model/val_losses.csv")
     helper.write_csv(train_losses, "saved_model/train_losses.csv")
     helper.write_csv(val_accuracies, "saved_model/val_accuracies.csv")
@@ -324,9 +324,9 @@ def load_net(root_dir):
     train_losses = helper.read_csv(root_dir + "train_losses.csv")
     val_accuracies = helper.read_csv(root_dir + "val_accuracies.csv")
     train_accuracies = helper.read_csv(root_dir + "train_accuracies.csv")
-    network = helper.load_net(root_dir + "model_parameters", image_size)
+    network, optim = helper.load_net(root_dir + "model_parameters", image_size)
 
-    return network, len(train_losses), val_losses, train_losses, val_accuracies, train_accuracies
+    return network, optim, len(train_losses), val_losses, train_losses, val_accuracies, train_accuracies
 
 def confusion_array(arrays):
 
@@ -364,23 +364,30 @@ def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[
         confusion_matrix = confusion_array(confusion_matrix)
         data_plot.plot_confusion(confusion_matrix, "Training Set Normalized")
 
+        _, __, confusion_matrix = test(test_set, verbose=True)
+        data_plot.plot_confusion(confusion_matrix, "Testing Set")
+        confusion_matrix = confusion_array(confusion_matrix)
+        data_plot.plot_confusion(confusion_matrix, "Testing Set Normalized")
+
     return val_losses, train_losses, val_accuracies, train_accuracies
 
-#train_net()
+train_net()
 #helper.plot_samples(train_data, data_plot)
 
-network, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/")
+network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/")
+
+EPOCHS = 10
 
 #test(val_set, verbose=True)
 
-"""train_net(starting_epoch=starting_epoch,
+train_net(starting_epoch=starting_epoch,
           val_losses=val_losses,
           train_losses=train_losses,
           val_accuracies=val_accuracies,
-          train_accuracies=train_accuracies)"""
+          train_accuracies=train_accuracies)
 
 
-predictions = predict(test_set)
+#predictions = predict(test_set)
 
 
 
