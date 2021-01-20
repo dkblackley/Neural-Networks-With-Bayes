@@ -7,7 +7,7 @@ calling other classes for plotting results of the network
 import torch
 import torch.optim as optimizer
 from torchvision import transforms
-from torch.utils.data import random_split, SubsetRandomSampler, SequentialSampler
+from torch.utils.data import random_split, SubsetRandomSampler, SequentialSampler, Subset
 import numpy as np
 import data_loading
 import data_plotting
@@ -19,8 +19,9 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 0
-DEBUG = False  # Toggle this to only run for 1% of the training data
+EPOCHS = 25
+UNKNOWN_CLASS = True
+DEBUG = True  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
@@ -83,6 +84,7 @@ composed_test = transforms.Compose([
                                ])"""
 
 train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_train)
+train_data.count_classes()
 test_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_test)
 #test_data = data_loading.data_set("Test_meta_data/ISIC_2019_Test_Metadata.csv", "ISIC_2019_Test_Input", transforms=composed_test)
 
@@ -95,17 +97,49 @@ weights.pop()  # Remove the Unknown class"""
 
 def get_data_sets(plot=False):
 
-    indices = list(range(len(train_data)))
-    split_train = int(np.floor(0.7 * len(train_data)))
-    split_val = int(np.floor(0.33 * split_train))
 
-    np.random.seed(1337)
-    np.random.shuffle(indices)
+    if UNKNOWN_CLASS:
+        scc_idx = []
+        print("\nRemoving SCC class from train and validation sets")
+        for i in tqdm(range(0, len(train_data))):
+            if train_data[i]['label'] == 7:
+                scc_idx.append(i)
 
-    temp_idx, train_idx = indices[split_train:], indices[:split_train]
-    valid_idx, test_idx = temp_idx[split_val:], temp_idx[:split_val]
 
-    train_size = len(test_idx)
+
+        indices = list(range(len(train_data)))
+        indices = [x for x in indices if x not in scc_idx]
+
+        split_train = int(np.floor(0.7 * len(indices)))
+        split_val = int(np.floor(0.33 * split_train))
+
+        np.random.seed(1337)
+        np.random.shuffle(indices)
+
+        temp_idx, train_idx = indices[split_train:], indices[:split_train]
+        valid_idx, test_idx = temp_idx[split_val:], temp_idx[:split_val]
+        c = 0
+        for i in scc_idx:
+            if i not in test_idx:
+                c += 1
+                print(i)
+                test_idx.append(i)
+
+        print(c)
+        np.random.shuffle(test_idx)
+
+    else:
+        indices = list(range(len(train_data)))
+        split_train = int(np.floor(0.7 * len(train_data)))
+        split_val = int(np.floor(0.33 * split_train))
+
+        np.random.seed(1337)
+        np.random.shuffle(indices)
+
+        temp_idx, train_idx = indices[split_train:], indices[:split_train]
+        valid_idx, test_idx = temp_idx[split_val:], temp_idx[:split_val]
+
+
 
     if (bool(set(test_idx) & set(valid_idx))):
         print("HERE")
@@ -113,15 +147,18 @@ def get_data_sets(plot=False):
         print("HERE")
     if (bool(set(train_idx) & set(valid_idx))):
         print("HERE")
+    if (bool(set(test_idx) & set(scc_idx))):
+        print("HERE")
 
     train_sampler = SubsetRandomSampler(train_idx)
     valid_sampler = SubsetRandomSampler(valid_idx)
     # Don't shuffle the testing set for MC_DROPOUT
-    test_sampler = SequentialSampler(test_idx)
+    testing_data = Subset(test_data, test_idx)
+    #test_sampler = SequentialSampler(test_temp)
 
     training_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=train_sampler)
     valid_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=valid_sampler)
-    testing_set = torch.utils.data.DataLoader(test_data, batch_size=BATCH_SIZE, sampler=test_sampler)
+    testing_set = torch.utils.data.DataLoader(testing_data, batch_size=BATCH_SIZE, shuffle=False)
 
     if plot:
         helper.plot_set(training_set, data_plot, 0, 5)
@@ -130,21 +167,33 @@ def get_data_sets(plot=False):
 
     return training_set, valid_set, testing_set, len(test_idx)
 
-
 train_set, val_set, test_set, test_size = get_data_sets(plot=True)
 
-network = model.Classifier(image_size, dropout=0.5)
-network.to(device)
+#helper.count_classes(train_set, BATCH_SIZE)
+#helper.count_classes(val_set, BATCH_SIZE)
+helper.count_classes(test_set, BATCH_SIZE)
+
+if UNKNOWN_CLASS:
+    network = model.Classifier(image_size, 7, dropout=0.5)
+    network.to(device)
+    weights = [3188, 8985, 2319, 602, 1862, 164, 170]
+else:
+    network = model.Classifier(image_size, 8, dropout=0.5)
+    network.to(device)
+    weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
 
 optim = optimizer.Adam(network.parameters(), lr=0.001)
 
 #weights = list(helper.count_classes(train_set, BATCH_SIZE).values())
-weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
+
 
 new_weights = []
 index = 0
 for weight in weights:
-    new_weights.append(sum(weights)/(8 * weight))
+    if UNKNOWN_CLASS:
+        new_weights.append(sum(weights) / (7 * weight))
+    else:
+        new_weights.append(sum(weights)/(8 * weight))
     index = index + 1
 
 #weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
@@ -163,7 +212,10 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
     """
 
     intervals = []
-    best_val = max(val_accuracy)
+    if not val_accuracy:
+        best_val = 0
+    else:
+        best_val = max(val_accuracy)
 
     for i in range(0, len(val_losses)):
         intervals.append(i)
@@ -179,8 +231,8 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
         correct = 0
         total = 0
         incorrect = 0
-        correct_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
-        incorrect_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
+        correct_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
+        incorrect_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
 
         print(f"\nEpoch {epoch + 1} of {EPOCHS + current_epoch}:")
 
@@ -276,8 +328,8 @@ def test(testing_set, verbose=False):
     correct = 0
     total = 0
     incorrect = 0
-    correct_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
-    incorrect_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0, 'UNK': 0}
+    correct_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
+    incorrect_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
     losses = []
     confusion_matrix = []
 
@@ -350,13 +402,13 @@ def save_network(optim, val_losses, train_losses, val_accuracies, train_accuraci
     helper.write_csv(train_accuracies, root_dir + "train_accuracies.csv")
 
 
-def load_net(root_dir):
+def load_net(root_dir, output_size):
 
     val_losses = helper.read_csv(root_dir + "val_losses.csv")
     train_losses = helper.read_csv(root_dir + "train_losses.csv")
     val_accuracies = helper.read_csv(root_dir + "val_accuracies.csv")
     train_accuracies = helper.read_csv(root_dir + "train_accuracies.csv")
-    network, optim = helper.load_net(root_dir + "model_parameters", image_size)
+    network, optim = helper.load_net(root_dir + "model_parameters", image_size, output_size)
 
     return network, optim, len(train_losses), val_losses, train_losses, val_accuracies, train_accuracies
 
@@ -447,10 +499,10 @@ def print_metrics():
     data_plot.average_uncertainty_by_class(correct_sr, incorrect_sr, "Softmax Response Accuracies by Class")
 
 
-#train_net()
+train_net()
 #helper.plot_samples(train_data, data_plot)
 
-network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("best_model/")
+network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/", 7)
 
 #test(val_set, verbose=True)
 
@@ -461,11 +513,11 @@ network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_
           train_accuracies=train_accuracies)"""
 
 
-"""predictions_softmax = testing.predict(test_set, network, test_size, softmax=True)
-helper.write_rows(predictions_softmax, "best_model/softmax_predictions.csv")
+predictions_softmax = testing.predict(test_set, network, test_size, softmax=True)
+helper.write_rows(predictions_softmax, "saved_model/softmax_predictions.csv")
 
 predictions_mc = testing.predict(test_set, network, test_size, mc_dropout=True, forward_passes=10)
-helper.write_rows(predictions_mc, "best_model/mc_predictions.csv")"""
+helper.write_rows(predictions_mc, "saved_model/mc_predictions.csv")
 
 predictions_softmax = helper.read_rows("saved_model/softmax_predictions.csv")
 predictions_mc = helper.read_rows("saved_model/mc_predictions.csv")

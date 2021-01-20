@@ -51,8 +51,8 @@ def change_to_device(network, optim, device):
 
     return network, optim
 
-def load_net(PATH, image_size):
-    net = model.Classifier(image_size)
+def load_net(PATH, image_size, output_size):
+    net = model.Classifier(image_size, output_size)
     optim = optimizer.Adam(net.parameters(), lr=0.001)
     states = torch.load(PATH)
 
@@ -116,7 +116,7 @@ def write_csv(list_to_write, filename):
 def count_classes(dataset, batch_size):
     LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
     labels_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
-    print("Counting labels")
+    print("\nCounting labels")
 
     for i_batch, sample_batch in enumerate(tqdm(dataset)):
         labels_batch = sample_batch['label']
@@ -135,7 +135,7 @@ def count_classes(dataset, batch_size):
     temp = labels_count.values()
     temp = list(temp)
     temp = sum(temp)
-    print(f"Total number of samples in train set: {temp}")
+    print(f"Total number of samples in the set is: {temp}")
 
     return labels_count
 
