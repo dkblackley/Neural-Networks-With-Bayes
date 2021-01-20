@@ -143,17 +143,41 @@ class DataPlotting:
         for array in predictions_mc:
             i = i + 1
             mc_entropies.append(array.pop())
-            coverage.append(i/len(array))
+            coverage.append(i/len(predictions_mc))
 
         for array in predictions_softmax:
             sm_entropies.append(array.pop())
 
+        mc_entropies.sort()
+        sm_entropies.sort()
+
         plt.plot(coverage, mc_entropies, label="MC Dropout")
-        plt.plot(coverage, sm_entropies, label="MC Dropout")
+        plt.plot(coverage, sm_entropies, label="Softmax response")
         plt.title(title)
         plt.xlabel("Coverage")
         plt.ylabel("Risk")
         plt.legend(loc='best')
 
         plt.savefig("saved_model/risk_curve.png")
+        plt.show()
+
+    def plot_correct_incorrect_uncertainties(self, correct, incorrect, title):
+
+        predictions = []
+        i = 0
+
+        for pred in correct:
+            predictions.append([pred.pop(), i/(len(correct) + len(incorrect)), "Correct"])
+            i = i + 1
+
+        for pred in incorrect:
+            predictions.append([pred.pop(), i/(len(correct) + len(incorrect)), "Incorrect"])
+            i = i + 1
+
+        correct_incorrect = pd.DataFrame(predictions, columns=['Entropy', "Density", "Classification"])
+
+        sn.displot(correct_incorrect, x="Entropy", hue="Classification", kind="kde", fill=True)
+        plt.title(title)
+
+        plt.savefig(f"saved_model/{title}.png")
         plt.show()

@@ -150,3 +150,25 @@ def write_rows(list_to_write, filename):
     with open(filename, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerows(list_to_write)
+
+def read_rows(filname):
+
+    with open(filname, 'r', newline='') as f:
+        reader = csv.reader(f)
+        arrays = list(reader)
+
+    return arrays
+
+def float_to_string(arrays):
+
+    for c in range(0, len(arrays)):
+        arrays[c] = '{:.17f}'.format(arrays[c])
+
+    return arrays
+
+def string_to_float(arrays):
+    for c in range(0, len(arrays)):
+        for i in range(0, len(arrays[c])):
+            arrays[c][i] = float(arrays[c][i])
+
+    return arrays

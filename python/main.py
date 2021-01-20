@@ -12,13 +12,14 @@ import numpy as np
 import data_loading
 import data_plotting
 import testing
+from copy import deepcopy
 import helper
 import model
 import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 3
+EPOCHS = 0
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
@@ -27,6 +28,7 @@ MC_DROPOUT = False
 FORWARD_PASSES = 100
 BBB = False
 image_size = 224
+train_size = 0
 
 if ENABLE_GPU:
     device = torch.device("cuda:0")
@@ -94,6 +96,8 @@ def get_data_sets(plot=False):
     temp_idx, train_idx = indices[split_train:], indices[:split_train]
     valid_idx, test_idx = temp_idx[split_val:], temp_idx[:split_val]
 
+    train_size = len(test_idx)
+
     if (bool(set(test_idx) & set(valid_idx))):
         print("HERE")
     if (bool(set(test_idx) & set(train_idx))):
@@ -118,7 +122,7 @@ def get_data_sets(plot=False):
     return training_set, valid_set, testing_set
 
 
-train_set, val_set, test_set = get_data_sets(plot=True)
+train_set, val_set, test_set = get_data_sets()
 
 network = model.Classifier(image_size, dropout=0.5)
 network.to(device)
@@ -380,25 +384,75 @@ def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[
 
     return val_losses, train_losses, val_accuracies, train_accuracies
 
-train_net()
+def get_correct_incorrect(predictions, data_set):
+
+    correct = []
+    incorrect = []
+    wrong = right = total = 0
+
+    for i_batch, sample_batch in enumerate(tqdm(data_set)):
+
+        label_batch = sample_batch['label']
+
+        for i in range(0, BATCH_SIZE):
+            # Try catch for the last batch, which wont be perfectly of size BATCH_SIZE
+            try:
+                temp = predictions[total].pop()
+                answer = np.argmax(predictions[total])
+                real_answer = label_batch[i]
+            except:
+                break
+
+
+            if answer == real_answer:
+                correct.append([answer, temp])
+                right += 1
+            else:
+                incorrect.append([answer, temp])
+                wrong += 1
+            total += 1
+
+    print(f"Accuracy: {(right/total) * 100}")
+
+    return correct, incorrect
+
+def print_metrics():
+
+    correct_mc, incorrect_mc = get_correct_incorrect(deepcopy(predictions_mc), test_set)
+    correct_sr, incorrect_sr = get_correct_incorrect(deepcopy(predictions_softmax), test_set)
+
+    data_plot.plot_risk_coverage(deepcopy(predictions_mc), deepcopy(predictions_softmax), "Risk Coverage")
+    data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, "MC Dropout")
+    data_plot.plot_correct_incorrect_uncertainties(correct_sr, incorrect_sr, "Softmax Response")
+
+
+#train_net()
 #helper.plot_samples(train_data, data_plot)
 
-network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/")
+# network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_models/Classifier 25 EPOCHS 60% weights balanced/")
 
 #EPOCHS = 10
 
 #test(val_set, verbose=True)
 
-train_net(starting_epoch=starting_epoch,
+"""train_net(starting_epoch=starting_epoch,
           val_losses=val_losses,
           train_losses=train_losses,
           val_accuracies=val_accuracies,
-          train_accuracies=train_accuracies)
+          train_accuracies=train_accuracies)"""
 
 
-predictions = testing.predict(test_set)
+"""predictions_softmax = testing.predict(test_set, network, train_size, softmax=True)
+helper.write_rows(predictions_softmax, "saved_model/softmax_predictions.csv")
 
+predictions_mc = testing.predict(test_set, network, train_size, mc_dropout=True, forward_passes=3)
+helper.write_rows(predictions_mc, "saved_model/mc_predictions.csv")"""
 
+predictions_softmax = helper.read_rows("saved_model/softmax_predictions.csv")
+predictions_mc = helper.read_rows("saved_model/mc_predictions.csv")
 
+predictions_softmax = helper.string_to_float(predictions_softmax)
+predictions_mc = helper.string_to_float(predictions_mc)
 
+print_metrics()
 
