@@ -21,7 +21,7 @@ from tqdm import tqdm
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 EPOCHS = 25
 UNKNOWN_CLASS = True
-DEBUG = True  # Toggle this to only run for 1% of the training data
+DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
@@ -118,14 +118,11 @@ def get_data_sets(plot=False):
 
         temp_idx, train_idx = indices[split_train:], indices[:split_train]
         valid_idx, test_idx = temp_idx[split_val:], temp_idx[:split_val]
-        c = 0
+        
         for i in scc_idx:
             if i not in test_idx:
-                c += 1
-                print(i)
                 test_idx.append(i)
 
-        print(c)
         np.random.shuffle(test_idx)
 
     else:
@@ -138,17 +135,6 @@ def get_data_sets(plot=False):
 
         temp_idx, train_idx = indices[split_train:], indices[:split_train]
         valid_idx, test_idx = temp_idx[split_val:], temp_idx[:split_val]
-
-
-
-    if (bool(set(test_idx) & set(valid_idx))):
-        print("HERE")
-    if (bool(set(test_idx) & set(train_idx))):
-        print("HERE")
-    if (bool(set(train_idx) & set(valid_idx))):
-        print("HERE")
-    if (bool(set(test_idx) & set(scc_idx))):
-        print("HERE")
 
     train_sampler = SubsetRandomSampler(train_idx)
     valid_sampler = SubsetRandomSampler(valid_idx)
@@ -169,8 +155,8 @@ def get_data_sets(plot=False):
 
 train_set, val_set, test_set, test_size = get_data_sets(plot=True)
 
-#helper.count_classes(train_set, BATCH_SIZE)
-#helper.count_classes(val_set, BATCH_SIZE)
+helper.count_classes(train_set, BATCH_SIZE)
+helper.count_classes(val_set, BATCH_SIZE)
 helper.count_classes(test_set, BATCH_SIZE)
 
 if UNKNOWN_CLASS:
@@ -516,7 +502,7 @@ network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_
 predictions_softmax = testing.predict(test_set, network, test_size, softmax=True)
 helper.write_rows(predictions_softmax, "saved_model/softmax_predictions.csv")
 
-predictions_mc = testing.predict(test_set, network, test_size, mc_dropout=True, forward_passes=10)
+predictions_mc = testing.predict(test_set, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
 helper.write_rows(predictions_mc, "saved_model/mc_predictions.csv")
 
 predictions_softmax = helper.read_rows("saved_model/softmax_predictions.csv")
