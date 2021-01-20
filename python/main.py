@@ -461,11 +461,11 @@ network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_
           train_accuracies=train_accuracies)"""
 
 
-predictions_softmax = testing.predict(test_set, network, test_size, softmax=True)
+"""predictions_softmax = testing.predict(test_set, network, test_size, softmax=True)
 helper.write_rows(predictions_softmax, "best_model/softmax_predictions.csv")
 
 predictions_mc = testing.predict(test_set, network, test_size, mc_dropout=True, forward_passes=10)
-helper.write_rows(predictions_mc, "best_model/mc_predictions.csv")
+helper.write_rows(predictions_mc, "best_model/mc_predictions.csv")"""
 
 predictions_softmax = helper.read_rows("saved_model/softmax_predictions.csv")
 predictions_mc = helper.read_rows("saved_model/mc_predictions.csv")
