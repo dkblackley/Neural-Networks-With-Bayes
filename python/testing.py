@@ -119,7 +119,7 @@ def predict_ISIC(data_set, data_loader, network, device, forward_passes, softmax
 
 def softmax_pred(data_set, network, n_classes):
 
-    predictions = np.empty(0, n_classes)
+    predictions = np.empty((0, n_classes))
     soft_max = nn.Softmax(dim=1)
 
     for i_batch, sample_batch in enumerate(tqdm(data_set)):
@@ -131,20 +131,20 @@ def softmax_pred(data_set, network, n_classes):
             predictions = np.vstack((predictions, output.cpu().numpy()))
 
     epsilon = sys.float_info.min
-    entropies = entropies = -np.sum(predictions*np.log(predictions + epsilon), axis=-1)
+    entropies = -np.sum(predictions*np.log10(predictions + epsilon), axis=-1)
 
-    predicions = predictions.tolist()
+    predictions = predictions.tolist()
     entropies = entropies.tolist()
 
-    for entropy in entropies:
-        entropy = (entropy - min(entropies)) / (max(entropies) - min(entropies))
+    for i in range(0, len(entropies)):
+        entropies[i] = (entropies[i] - min(entropies)) / (max(entropies) - min(entropies))
 
     i = 0
-    for preds in predicions:
+    for preds in predictions:
 
         preds.append(entropies[i])
 
-        for c in range(1, len(preds)):
+        for c in range(0, len(preds)):
             preds[c] = '{:.17f}'.format(preds[c])
 
         i = i + 1
@@ -157,41 +157,39 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes):
     soft_max = nn.Softmax(dim=1)
     drop_predictions = np.empty((0, n_samples, n_classes))
 
-    for i in tqdm(range(forward_passes)):
-
+    for i in range(0, forward_passes):
         print(f"\n\n Forward pass {i + 1} of {forward_passes}\n")
         predictions = np.empty((0, n_classes))
 
-        # Tqdm tends to mess up when inside another tqdm, do this to fix it.
-        with tqdm(total=len(data_set), position=0, leave=True) as pbar:
-            for i_batch, sample_batch in enumerate(tqdm((data_set), position=0, leave=True)):
-                image_batch = sample_batch['image']
 
-                with torch.no_grad():
-                    outputs = soft_max(network(image_batch, dropout=True))
+        for i_batch, sample_batch in enumerate(tqdm((data_set), position=0, leave=True)):
+            image_batch = sample_batch['image']
 
-                for output in outputs:
-                    predictions = np.vstack((predictions, output.cpu().numpy()))
+            with torch.no_grad():
+                outputs = soft_max(network(image_batch, dropout=True))
+
+            for output in outputs:
+                predictions = np.vstack((predictions, output.cpu().numpy()))
 
         drop_predictions = np.vstack((drop_predictions, predictions[np.newaxis, :, :]))
 
     mean = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
 
     epsilon = sys.float_info.min
-    entropies = -np.sum(mean*np.log(mean + epsilon), axis=-1)  # shape (n_samples, n_classes)
+    entropies = -np.sum(mean*np.log10(mean + epsilon), axis=-1)  # shape (n_samples, n_classes)
 
     mean = mean.tolist()
     entropies = entropies.tolist()
 
-    for entropy in entropies:
-        entropy = (entropy - min(entropies))/(max(entropies) - min(entropies))
+    for i in range(0, len(entropies)):
+        entropies[i] = (entropies[i] - min(entropies))/(max(entropies) - min(entropies))
 
     i = 0
     for preds in mean:
 
         preds.append(entropies[i])
 
-        for c in range(1, len(preds)):
+        for c in range(0, len(preds)):
             preds[c] = '{:.17f}'.format(preds[c])
 
         i = i + 1

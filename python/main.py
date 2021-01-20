@@ -28,7 +28,8 @@ MC_DROPOUT = False
 FORWARD_PASSES = 100
 BBB = False
 image_size = 224
-train_size = 0
+test_size = 0
+best_val = 0
 
 if ENABLE_GPU:
     device = torch.device("cuda:0")
@@ -58,6 +59,13 @@ composed_train = transforms.Compose([
                                 transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
                                ])
 
+composed_test = transforms.Compose([
+                                transforms.Resize((image_size, image_size)),
+                                transforms.ToTensor(),
+                                # call helper.get_mean_and_std(data_set) to get mean and std
+                                transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
+                               ])
+
 """composed_train = transforms.Compose([
                                 transforms.Resize((image_size, image_size), Image.LANCZOS),
                                 transforms.ToTensor()
@@ -75,6 +83,7 @@ composed_train = transforms.Compose([
                                ])"""
 
 train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_train)
+test_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_test)
 #test_data = data_loading.data_set("Test_meta_data/ISIC_2019_Test_Metadata.csv", "ISIC_2019_Test_Input", transforms=composed_test)
 
 
@@ -112,17 +121,17 @@ def get_data_sets(plot=False):
 
     training_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=train_sampler)
     valid_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=valid_sampler)
-    testing_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=test_sampler)
+    testing_set = torch.utils.data.DataLoader(test_data, batch_size=BATCH_SIZE, sampler=test_sampler)
 
     if plot:
         helper.plot_set(training_set, data_plot, 0, 5)
         helper.plot_set(valid_set, data_plot, 0, 5)
         helper.plot_set(testing_set, data_plot, 0, 5)
 
-    return training_set, valid_set, testing_set
+    return training_set, valid_set, testing_set, len(test_idx)
 
 
-train_set, val_set, test_set = get_data_sets()
+train_set, val_set, test_set, test_size = get_data_sets(plot=True)
 
 network = model.Classifier(image_size, dropout=0.5)
 network.to(device)
@@ -154,6 +163,7 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
     """
 
     intervals = []
+    best_val = max(val_accuracy)
 
     for i in range(0, len(val_losses)):
         intervals.append(i)
@@ -239,7 +249,14 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
         data_plot.plot_loss(intervals, val_losses, train_losses)
         data_plot.plot_validation(intervals, val_accuracy, train_accuracy)
 
-        save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy)
+        save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, "saved_model/")
+
+        if best_val < max(val_accuracy):
+            save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, "best_model/")
+            best_val = max(val_accuracy)
+
+    data_plot.plot_loss(intervals, val_losses, train_losses)
+    data_plot.plot_validation(intervals, val_accuracy, train_accuracy)
 
     return intervals, val_losses, train_losses, val_accuracy, train_accuracy
 
@@ -325,12 +342,12 @@ def test(testing_set, verbose=False):
 
     return accuracy, average_loss, confusion_matrix
 
-def save_network(optim, val_losses, train_losses, val_accuracies, train_accuracies):
-    helper.save_net(network, optim, "saved_model/model_parameters")
-    helper.write_csv(val_losses, "saved_model/val_losses.csv")
-    helper.write_csv(train_losses, "saved_model/train_losses.csv")
-    helper.write_csv(val_accuracies, "saved_model/val_accuracies.csv")
-    helper.write_csv(train_accuracies, "saved_model/train_accuracies.csv")
+def save_network(optim, val_losses, train_losses, val_accuracies, train_accuracies, root_dir):
+    helper.save_net(network, optim, root_dir + "model_parameters")
+    helper.write_csv(val_losses, root_dir + "val_losses.csv")
+    helper.write_csv(train_losses, root_dir + "train_losses.csv")
+    helper.write_csv(val_accuracies, root_dir + "val_accuracies.csv")
+    helper.write_csv(train_accuracies, root_dir + "train_accuracies.csv")
 
 
 def load_net(root_dir):
@@ -433,9 +450,7 @@ def print_metrics():
 #train_net()
 #helper.plot_samples(train_data, data_plot)
 
-# network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_models/Classifier 25 EPOCHS 60% weights balanced/")
-
-#EPOCHS = 10
+network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("best_model/")
 
 #test(val_set, verbose=True)
 
@@ -459,4 +474,5 @@ predictions_softmax = helper.string_to_float(predictions_softmax)
 predictions_mc = helper.string_to_float(predictions_mc)
 
 print_metrics()
+
 
