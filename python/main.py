@@ -386,6 +386,8 @@ def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[
 
 def get_correct_incorrect(predictions, data_set):
 
+    predictions = deepcopy(predictions)
+
     correct = []
     incorrect = []
     wrong = right = total = 0
@@ -418,12 +420,14 @@ def get_correct_incorrect(predictions, data_set):
 
 def print_metrics():
 
-    correct_mc, incorrect_mc = get_correct_incorrect(deepcopy(predictions_mc), test_set)
-    correct_sr, incorrect_sr = get_correct_incorrect(deepcopy(predictions_softmax), test_set)
+    correct_mc, incorrect_mc = get_correct_incorrect(predictions_mc, test_set)
+    correct_sr, incorrect_sr = get_correct_incorrect(predictions_softmax, test_set)
 
-    data_plot.plot_risk_coverage(deepcopy(predictions_mc), deepcopy(predictions_softmax), "Risk Coverage")
+    data_plot.plot_risk_coverage(predictions_mc, predictions_softmax, "Risk Coverage")
     data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, "MC Dropout")
     data_plot.plot_correct_incorrect_uncertainties(correct_sr, incorrect_sr, "Softmax Response")
+    data_plot.average_uncertainty_by_class(correct_mc, incorrect_mc, "MC Dropout Accuracies by Class")
+    data_plot.average_uncertainty_by_class(correct_sr, incorrect_sr, "Softmax Response Accuracies by Class")
 
 
 #train_net()

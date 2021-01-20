@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from torchvision import transforms
 import seaborn as sn
 import pandas as pd
+from copy import deepcopy
 
 # LABELS = {'MEL': 0, 'NV': 1, 'BCC': 2, 'AK': 3, 'BKL': 4, 'DF': 5, 'VASC': 6, 'SCC': 7}
 
@@ -136,6 +137,8 @@ class DataPlotting:
         :param title: Title of the plot
         :return:
         """
+        predictions_mc = deepcopy(predictions_mc)
+        predictions_softmax = deepcopy(predictions_softmax)
         mc_entropies = []
         sm_entropies = []
         coverage = []
@@ -164,6 +167,8 @@ class DataPlotting:
     def plot_correct_incorrect_uncertainties(self, correct, incorrect, title):
 
         predictions = []
+        correct = deepcopy(correct)
+        incorrect = deepcopy(incorrect)
         i = 0
 
         for pred in correct:
@@ -179,5 +184,51 @@ class DataPlotting:
         sn.displot(correct_incorrect, x="Entropy", hue="Classification", kind="kde", fill=True)
         plt.title(title)
 
+        plt.savefig(f"saved_model/{title}.png")
+        plt.show()
+
+    def average_uncertainty_by_class(self, correct, incorrect, title):
+
+        labels_accuracy = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
+        labels_entropies = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
+        labels_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
+
+        correct = deepcopy(correct)
+        incorrect = deepcopy(incorrect)
+
+        for i in range(0, len(correct)):
+            answer = correct[i][0]
+            entropy = correct[i][1]
+
+            labels_accuracy[self.LABELS[answer]] += 1
+            labels_entropies[self.LABELS[answer]] += entropy
+            labels_count[self.LABELS[answer]] += 1
+
+        for i in range(0, len(incorrect)):
+            answer = incorrect[i][0]
+            entropy = incorrect[i][1]
+
+            labels_entropies[self.LABELS[answer]] += entropy
+            labels_count[self.LABELS[answer]] += 1
+
+        accuracies = []
+        entropies = []
+
+        for key in labels_accuracy.keys():
+            accuracies.append((labels_accuracy[key]/labels_count[key]) * 100)
+            entropies.append((labels_entropies[key]/labels_count[key]))
+
+
+        labels = list(labels_accuracy.keys())
+
+        fig, ax = plt.subplots()
+        ax.scatter(entropies, accuracies)
+
+        for i, txt in enumerate(labels):
+            ax.annotate(txt, (entropies[i], accuracies[i]))
+
+        plt.xlabel("Average Entropy")
+        plt.ylabel("Accuracy")
+        plt.title(title)
         plt.savefig(f"saved_model/{title}.png")
         plt.show()
