@@ -125,7 +125,7 @@ def softmax_pred(data_set, network, n_classes):
     for i_batch, sample_batch in enumerate(tqdm(data_set)):
         image_batch = sample_batch['image']
         with torch.no_grad():
-            outputs = soft_max(network(image_batch, dropout=True))
+            outputs = soft_max(network(image_batch, dropout=False))
 
         for output in outputs:
             predictions = np.vstack((predictions, output.cpu().numpy()))
@@ -154,6 +154,9 @@ def softmax_pred(data_set, network, n_classes):
 
 def monte_carlo(data_set, forward_passes, network, n_samples, n_classes):
 
+    # Add one for the entropy
+    n_classes = n_classes + 1
+
     soft_max = nn.Softmax(dim=1)
     drop_predictions = np.empty((0, n_samples, n_classes))
 
@@ -169,25 +172,48 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes):
                 outputs = soft_max(network(image_batch, dropout=True))
 
             for output in outputs:
-                predictions = np.vstack((predictions, output.cpu().numpy()))
+                answers = output.cpu().numpy()
+
+                # avoid log(0) errors
+                if np.max(answers) > 0.9999:
+                    entropy = 0.0
+                else:
+                    entropy = -np.sum(answers * np.log2(answers), axis=0)  # shape (n_samples, n_classes)
+
+
+                answers = np.append(answers, entropy)
+                predictions = np.vstack((predictions, answers))
 
         drop_predictions = np.vstack((drop_predictions, predictions[np.newaxis, :, :]))
 
+        if (i + 1) % 1 == 0 or i == 0:
+            mean = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
+
+            mean = mean.tolist()
+            entropies = [c[n_classes - 1] for c in mean]
+
+            for c in range(0, len(entropies)):
+                entropies[c] = (entropies[c] - min(entropies)) / (max(entropies) - min(entropies))
+
+            for c in range(0, len(mean)):
+                mean[c][n_classes - 1] = entropies[c]
+
+            for preds in mean:
+
+                for c in range(0, len(preds)):
+                    preds[c] = '{:.17f}'.format(preds[c])
+
+            helper.write_rows(mean, f"best_model/mc_forward_pass_{i}_predictions.csv")
+
     mean = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
 
-    epsilon = sys.float_info.min
-    entropies = -np.sum(mean*np.log10(mean + epsilon), axis=-1)  # shape (n_samples, n_classes)
-
     mean = mean.tolist()
-    entropies = entropies.tolist()
+    entropies = [i[n_classes] for i in mean]
 
-    for i in range(0, len(entropies)):
-        entropies[i] = (entropies[i] - min(entropies))/(max(entropies) - min(entropies))
-
+    for c in range(0, len(mean)):
+        mean[c][n_classes - 1] = entropies[c]
     i = 0
     for preds in mean:
-
-        preds.append(entropies[i])
 
         for c in range(0, len(preds)):
             preds[c] = '{:.17f}'.format(preds[c])

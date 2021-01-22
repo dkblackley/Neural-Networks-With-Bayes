@@ -18,7 +18,12 @@ class DataPlotting:
     Class for data plotting with matplotlib, contains methods for plotting loss, accuracies and
     confusion matrices
     """
-    LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
+
+    def __init__(self, unknown):
+        if unknown:
+            self.LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'UNK'}
+        else:
+            self.LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
 
     def show_data(self, data):
         """
@@ -111,7 +116,6 @@ class DataPlotting:
         """
 
         values = list(self.LABELS.values())
-        values.pop()
 
         if isinstance(array[0][0], int):
             form = 'd'

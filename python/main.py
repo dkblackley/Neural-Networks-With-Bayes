@@ -12,15 +12,14 @@ import numpy as np
 import data_loading
 import data_plotting
 import testing
-from copy import deepcopy
 import helper
 import model
 import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 25
-UNKNOWN_CLASS = True
+EPOCHS = 0
+UNKNOWN_CLASS = False
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
@@ -30,6 +29,8 @@ FORWARD_PASSES = 100
 BBB = False
 image_size = 224
 test_size = 0
+val_size = 0
+train_size = 0
 best_val = 0
 
 if ENABLE_GPU:
@@ -37,11 +38,7 @@ if ENABLE_GPU:
 else:
     device = torch.device("cpu")
 
-data_plot = data_plotting.DataPlotting()
-
-# One percent of the overall image size
-image_percent = image_size/100
-image_five_percent = int(image_percent * 5)
+data_plot = data_plotting.DataPlotting(UNKNOWN_CLASS)
 
 composed_train = transforms.Compose([
                                 transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0)),
@@ -55,7 +52,6 @@ composed_train = transforms.Compose([
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
-                                #transforms.RandomErasing(p=0.25, scale=(image_percent/image_size/10, image_percent/image_size/5)),
                                 # call helper.get_mean_and_std(data_set) to get mean and std
                                 transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
                                ])
@@ -118,7 +114,7 @@ def get_data_sets(plot=False):
 
         temp_idx, train_idx = indices[split_train:], indices[:split_train]
         valid_idx, test_idx = temp_idx[split_val:], temp_idx[:split_val]
-        
+
         for i in scc_idx:
             if i not in test_idx:
                 test_idx.append(i)
@@ -151,13 +147,14 @@ def get_data_sets(plot=False):
         helper.plot_set(valid_set, data_plot, 0, 5)
         helper.plot_set(testing_set, data_plot, 0, 5)
 
-    return training_set, valid_set, testing_set, len(test_idx)
 
-train_set, val_set, test_set, test_size = get_data_sets(plot=True)
+    return training_set, valid_set, testing_set, len(test_idx), len(train_idx), len(valid_idx)
 
-helper.count_classes(train_set, BATCH_SIZE)
-helper.count_classes(val_set, BATCH_SIZE)
-helper.count_classes(test_set, BATCH_SIZE)
+train_set, val_set, test_set, test_size, train_size, val_size = get_data_sets(plot=True)
+
+#helper.count_classes(train_set, BATCH_SIZE)
+#helper.count_classes(val_set, BATCH_SIZE)
+#helper.count_classes(test_set, BATCH_SIZE)
 
 if UNKNOWN_CLASS:
     network = model.Classifier(image_size, 7, dropout=0.5)
@@ -398,19 +395,6 @@ def load_net(root_dir, output_size):
 
     return network, optim, len(train_losses), val_losses, train_losses, val_accuracies, train_accuracies
 
-def confusion_array(arrays):
-
-    new_arrays = []
-
-    for array in arrays:
-        new_array = []
-
-        for item in array:
-            new_array.append(round(item / (sum(array) + 1), 4))
-
-        new_arrays.append(new_array)
-
-    return new_arrays
 
 def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[], train_accuracies=[]):
     """
@@ -422,61 +406,46 @@ def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[
 
     if not DEBUG:
 
-        _, __, confusion_matrix = test(val_set, verbose=True)
-        data_plot.plot_confusion(confusion_matrix, "Validation Set")
-        confusion_matrix = confusion_array(confusion_matrix)
-        data_plot.plot_confusion(confusion_matrix, "Validation Set Normalized")
+        if UNKNOWN_CLASS:
+            predictions_sr = testing.predict(val_set, network, val_size, softmax=True)
+            confusion_matrix = helper.predictions_to_confusion()
+            data_plot.plot_confusion(confusion_matrix, "Validation Set")
+            confusion_matrix = helper.confusion_array(confusion_matrix)
+            data_plot.plot_confusion(confusion_matrix, "Validation Set Normalized")
 
-        _, __, confusion_matrix = test(train_set, verbose=True)
-        data_plot.plot_confusion(confusion_matrix, "Training Set")
-        confusion_matrix = confusion_array(confusion_matrix)
-        data_plot.plot_confusion(confusion_matrix, "Training Set Normalized")
+            _, __, confusion_matrix = test(train_set, verbose=True)
+            data_plot.plot_confusion(confusion_matrix, "Training Set")
+            confusion_matrix = helper.confusion_array(confusion_matrix)
+            data_plot.plot_confusion(confusion_matrix, "Training Set Normalized")
 
-        _, __, confusion_matrix = test(test_set, verbose=True)
-        data_plot.plot_confusion(confusion_matrix, "Testing Set")
-        confusion_matrix = confusion_array(confusion_matrix)
-        data_plot.plot_confusion(confusion_matrix, "Testing Set Normalized")
+            _, __, confusion_matrix = test(test_set, verbose=True)
+            data_plot.plot_confusion(confusion_matrix, "Testing Set")
+            confusion_matrix = helper.confusion_array(confusion_matrix)
+            data_plot.plot_confusion(confusion_matrix, "Testing Set Normalized")
+        else:
+            _, __, confusion_matrix = test(val_set, verbose=True)
+            data_plot.plot_confusion(confusion_matrix, "Validation Set")
+            confusion_matrix = helper.confusion_array(confusion_matrix)
+            data_plot.plot_confusion(confusion_matrix, "Validation Set Normalized")
+
+            _, __, confusion_matrix = test(train_set, verbose=True)
+            data_plot.plot_confusion(confusion_matrix, "Training Set")
+            confusion_matrix = helper.confusion_array(confusion_matrix)
+            data_plot.plot_confusion(confusion_matrix, "Training Set Normalized")
+
+            _, __, confusion_matrix = test(test_set, verbose=True)
+            data_plot.plot_confusion(confusion_matrix, "Testing Set")
+            confusion_matrix = helper.confusion_array(confusion_matrix)
+            data_plot.plot_confusion(confusion_matrix, "Testing Set Normalized")
+
 
     return val_losses, train_losses, val_accuracies, train_accuracies
 
-def get_correct_incorrect(predictions, data_set):
-
-    predictions = deepcopy(predictions)
-
-    correct = []
-    incorrect = []
-    wrong = right = total = 0
-
-    for i_batch, sample_batch in enumerate(tqdm(data_set)):
-
-        label_batch = sample_batch['label']
-
-        for i in range(0, BATCH_SIZE):
-            # Try catch for the last batch, which wont be perfectly of size BATCH_SIZE
-            try:
-                temp = predictions[total].pop()
-                answer = np.argmax(predictions[total])
-                real_answer = label_batch[i]
-            except:
-                break
-
-
-            if answer == real_answer:
-                correct.append([answer, temp])
-                right += 1
-            else:
-                incorrect.append([answer, temp])
-                wrong += 1
-            total += 1
-
-    print(f"Accuracy: {(right/total) * 100}")
-
-    return correct, incorrect
 
 def print_metrics():
 
-    correct_mc, incorrect_mc = get_correct_incorrect(predictions_mc, test_set)
-    correct_sr, incorrect_sr = get_correct_incorrect(predictions_softmax, test_set)
+    correct_mc, incorrect_mc = helper.get_correct_incorrect(predictions_mc, test_set, BATCH_SIZE)
+    correct_sr, incorrect_sr = helper.get_correct_incorrect(predictions_softmax, test_set, BATCH_SIZE)
 
     data_plot.plot_risk_coverage(predictions_mc, predictions_softmax, "Risk Coverage")
     data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, "MC Dropout")
@@ -485,10 +454,10 @@ def print_metrics():
     data_plot.average_uncertainty_by_class(correct_sr, incorrect_sr, "Softmax Response Accuracies by Class")
 
 
-train_net()
+#train_net()
 #helper.plot_samples(train_data, data_plot)
 
-network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/", 7)
+# network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/", 8)
 
 #test(val_set, verbose=True)
 
@@ -499,8 +468,10 @@ network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_
           train_accuracies=train_accuracies)"""
 
 
-predictions_softmax = testing.predict(test_set, network, test_size, softmax=True)
-helper.write_rows(predictions_softmax, "saved_model/softmax_predictions.csv")
+"""predictions_softmax = testing.predict(test_set, network, test_size, softmax=True)
+helper.write_rows(predictions_softmax, "saved_model/softmax_predictions.csv")"""
+
+network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("best_model/", 8)
 
 predictions_mc = testing.predict(test_set, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
 helper.write_rows(predictions_mc, "saved_model/mc_predictions.csv")

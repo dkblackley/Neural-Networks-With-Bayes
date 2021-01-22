@@ -8,6 +8,8 @@ import model
 from tqdm import tqdm
 import csv
 import torch.optim as optimizer
+from copy import deepcopy
+import numpy as np
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
 
@@ -159,6 +161,12 @@ def read_rows(filname):
 
     return arrays
 
+def predictions_to_confusion(predictions):
+    confusion = []
+
+    for pred in predictions:
+        pass
+
 def float_to_string(arrays):
 
     for c in range(0, len(arrays)):
@@ -172,3 +180,51 @@ def string_to_float(arrays):
             arrays[c][i] = float(arrays[c][i])
 
     return arrays
+
+def get_correct_incorrect(predictions, data_set, batch_size):
+
+    predictions = deepcopy(predictions)
+
+    correct = []
+    incorrect = []
+    wrong = right = total = 0
+
+    for i_batch, sample_batch in enumerate(tqdm(data_set)):
+
+        label_batch = sample_batch['label']
+
+        for i in range(0, batch_size):
+            # Try catch for the last batch, which wont be perfectly of size BATCH_SIZE
+            try:
+                temp = predictions[total].pop()
+                answer = np.argmax(predictions[total])
+                real_answer = label_batch[i]
+            except:
+                break
+
+
+            if answer == real_answer:
+                correct.append([answer, temp])
+                right += 1
+            else:
+                incorrect.append([answer, temp])
+                wrong += 1
+            total += 1
+
+    print(f"Accuracy: {(right/total) * 100}")
+
+    return correct, incorrect
+
+def confusion_array(arrays):
+
+    new_arrays = []
+
+    for array in arrays:
+        new_array = []
+
+        for item in array:
+            new_array.append(round(item / (sum(array) + 1), 4))
+
+        new_arrays.append(new_array)
+
+    return new_arrays
