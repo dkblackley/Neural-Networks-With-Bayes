@@ -1,4 +1,5 @@
-//Good, easy to read paper on MC Dropout and skin lesion classification
+//Good, easy to read paper on MC Dropout and skin lesion classification, Jounral
+//Of medicine however, so there isn't much in terms of technical details
 @article{aryan,
     author =       "Aryan Mobiny, Aditi Singh and Hien Van Nguyen",
     title =        "Risk-Aware Machine Learning Classifier for Skin Lesion Diagnosis",
@@ -9,12 +10,116 @@
     DOI =          "https://doi.org/10.3390/jcm8081241"
 }
 
+//Gals paper on MC dropout
+@misc{gal2016dropout,
+      title={Dropout as a Bayesian Approximation: Representing Model Uncertainty in Deep Learning},
+      author={Yarin Gal and Zoubin Ghahramani},
+      year={2016},
+      eprint={1506.02142},
+      archivePrefix={arXiv},
+      primaryClass={stat.ML}
+}
+
 //good disertation for the background mathematics
 @inproceedings{Chai2018UncertaintyEI,
   title={Uncertainty Estimation in Bayesian Neural Networks And Links to Interpretability},
   author={Lucy R. Chai},
   year={2018}
 }
+
+//Shows that 1 - maximum softmax response can actually be a pretty
+//good representation of model uncertainty
+@article{DBLP:journals/corr/HendrycksG16c,
+  author    = {Dan Hendrycks and
+               Kevin Gimpel},
+  title     = {A Baseline for Detecting Misclassified and Out-of-Distribution Examples
+               in Neural Networks},
+  journal   = {CoRR},
+  volume    = {abs/1610.02136},
+  year      = {2016},
+  url       = {http://arxiv.org/abs/1610.02136},
+  archivePrefix = {arXiv},
+  eprint    = {1610.02136},
+  timestamp = {Mon, 13 Aug 2018 16:47:27 +0200},
+  biburl    = {https://dblp.org/rec/journals/corr/HendrycksG16c.bib},
+  bibsource = {dblp computer science bibliography, https://dblp.org}
+}
+
+//Paper comparing MC dropout to softmax response in skin lesion classification
+@article{
+  author = {Leibig, C.,
+          Allken, V.
+          Ayhan, M. S.,
+          Berens, P.,
+          Wahl, S.},
+  title = {Leveraging uncertainty information from deep neural networks for disease detection},
+  jounral = {Scientific Reports},
+  volume = {Sci Rep 7},
+  number = {17816},
+  year = {2017},
+  DOI = {https://doi.org/10.1038/s41598-017-17876-z}
+
+}
+
+//Paper proposes a novel way to measure uncertainty with MC_Dropout by using
+//Something called BC Uncertainty which looks at similarity between predictive
+//output histograms
+@InProceedings{10.1007/978-3-030-32689-0_6,
+author="Van Molle, Pieter
+and Verbelen, Tim
+and De Boom, Cedric
+and Vankeirsbilck, Bert
+and De Vylder, Jonas
+and Diricx, Bart
+and Kimpe, Tom
+and Simoens, Pieter
+and Dhoedt, Bart",
+editor="Greenspan, Hayit
+and Tanno, Ryutaro
+and Erdt, Marius
+and Arbel, Tal
+and Baumgartner, Christian
+and Dalca, Adrian
+and Sudre, Carole H.
+and Wells, William M.
+and Drechsler, Klaus
+and Linguraru, Marius George
+and Oyarzun Laura, Cristina
+and Shekhar, Raj
+and Wesarg, Stefan
+and Gonz{\'a}lez Ballester, Miguel {\'A}ngel",
+title="Quantifying Uncertainty of Deep Neural Networks in Skin Lesion Classification",
+booktitle="Uncertainty for Safe Utilization of Machine Learning in Medical Imaging and Clinical Image-Based Procedures",
+year="2019",
+publisher="Springer International Publishing",
+address="Cham",
+pages="52--61",
+abstract="Deep neural networks are becoming the new standard for automated image classification and segmentation. Recently, such models are also gaining traction in the context of medical diagnosis. However, when using a neural network as a decision support tool, it is important to also quantify the (un)certainty regarding the outputs of the system. Current Bayesian techniques approximate the true predictive output distribution via sampling, and quantify the uncertainty based on the variance of the output samples. In this paper, we highlight the limitations of a variance based metric, and propose a novel uncertainty metric based on the overlap of the output distributions. We show that this yields promising results on the HAM10000 dataset for skin lesion classification.",
+isbn="978-3-030-32689-0"
+}
+
+//Paper comparing entropy to softmax response to variance as a measure of uncertainty
+//On the segmentation of skin lesions
+@misc{devries2018leveraging,
+      title={Leveraging Uncertainty Estimates for Predicting Segmentation Quality},
+      author={Terrance DeVries and Graham W. Taylor},
+      year={2018},
+      eprint={1807.00502},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
+
+//Paper discussing use of different measures for uncertainty, found that
+//Variance gets the best results on average, also applying augmentations at run
+//time helps to get a better estimation of uncertainty
+@InProceedings{Combalia_2020_CVPR_Workshops,
+author = {Combalia, Marc and Hueto, Ferran and Puig, Susana and Malvehy, Josep and Vilaplana, Veronica},
+title = {Uncertainty Estimation in Deep Neural Networks for Dermoscopic Image Classification},
+booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},
+month = {June},
+year = {2020}
+}
+
 
 @book{latexcompanion,
     author    = "Michel Goossens and Frank Mittelbach and Alexander Samarin",
