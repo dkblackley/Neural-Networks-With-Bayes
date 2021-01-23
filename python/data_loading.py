@@ -67,6 +67,14 @@ class data_set(Dataset):
     def get_filename(self, index):
         return self.file_names[index]
 
+    def get_label(self, index):
+        """
+        Returns the label as an integer at the specified index
+        :param index:
+        :return:
+        """
+        return self.get_class_name(self.labels.iloc[index].values)[0]
+
     def count_classes(self):
 
         """

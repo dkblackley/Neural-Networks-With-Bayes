@@ -7,7 +7,7 @@ calling other classes for plotting results of the network
 import torch
 import torch.optim as optimizer
 from torchvision import transforms
-from torch.utils.data import random_split, SubsetRandomSampler, SequentialSampler, Subset
+from torch.utils.data import random_split, SubsetRandomSampler, Subset
 import numpy as np
 import data_loading
 import data_plotting
@@ -28,6 +28,7 @@ MC_DROPOUT = False
 FORWARD_PASSES = 100
 BBB = False
 image_size = 224
+test_indexs = []
 test_size = 0
 val_size = 0
 train_size = 0
@@ -148,9 +149,10 @@ def get_data_sets(plot=False):
         helper.plot_set(testing_set, data_plot, 0, 5)
 
 
-    return training_set, valid_set, testing_set, len(test_idx), len(train_idx), len(valid_idx)
 
-train_set, val_set, test_set, test_size, train_size, val_size = get_data_sets(plot=True)
+    return training_set, valid_set, testing_set, len(test_idx), len(train_idx), len(valid_idx), test_idx
+
+train_set, val_set, test_set, test_size, train_size, val_size, test_indexs = get_data_sets(plot=True)
 
 #helper.count_classes(train_set, BATCH_SIZE)
 #helper.count_classes(val_set, BATCH_SIZE)
@@ -444,10 +446,13 @@ def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[
 
 def print_metrics():
 
-    correct_mc, incorrect_mc = helper.get_correct_incorrect(predictions_mc, test_set, BATCH_SIZE)
-    correct_sr, incorrect_sr = helper.get_correct_incorrect(predictions_softmax, test_set, BATCH_SIZE)
+    correct_mc, incorrect_mc, uncertain_mc = helper.get_correct_incorrect(predictions_mc, test_data, test_indexs)
+    print(f"MC Accuracy: {len(correct_mc)/(len(correct_mc) + len(incorrect_mc)) * 100}")
 
-    data_plot.plot_risk_coverage(predictions_mc, predictions_softmax, "Risk Coverage")
+    correct_sr, incorrect_sr, uncertain_sr = helper.get_correct_incorrect(predictions_softmax, test_data, test_indexs)
+    print(f"SM Accuracy: {len(correct_sr) / (len(correct_sr) + len(incorrect_sr)) * 100}")
+
+    data_plot.plot_risk_coverage(predictions_mc, predictions_softmax, "Risk Coverage", test_data, test_indexs)
     data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, "MC Dropout")
     data_plot.plot_correct_incorrect_uncertainties(correct_sr, incorrect_sr, "Softmax Response")
     data_plot.average_uncertainty_by_class(correct_mc, incorrect_mc, "MC Dropout Accuracies by Class")
@@ -467,17 +472,20 @@ def print_metrics():
           val_accuracies=val_accuracies,
           train_accuracies=train_accuracies)"""
 
+model_name = "best_model/"
+#model_name = "saved_model/"
 
-"""predictions_softmax = testing.predict(test_set, network, test_size, softmax=True)
-helper.write_rows(predictions_softmax, "saved_model/softmax_predictions.csv")"""
+network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(model_name, 8)
 
-network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("best_model/", 8)
+#predictions_softmax = testing.predict(test_set, network, test_size, softmax=True)
+#helper.write_rows(predictions_softmax, model_name + "softmax_predictions.csv")
 
-predictions_mc = testing.predict(test_set, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
+"""predictions_mc = testing.predict(test_set, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
 helper.write_rows(predictions_mc, "saved_model/mc_predictions.csv")
+"""
 
-predictions_softmax = helper.read_rows("saved_model/softmax_predictions.csv")
-predictions_mc = helper.read_rows("saved_model/mc_predictions.csv")
+predictions_softmax = helper.read_rows(model_name + "softmax_predictions.csv")
+predictions_mc = helper.read_rows(model_name + "mc_forward_pass_99_predictions.csv")
 
 predictions_softmax = helper.string_to_float(predictions_softmax)
 predictions_mc = helper.string_to_float(predictions_mc)

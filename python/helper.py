@@ -13,14 +13,13 @@ import numpy as np
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
 
-def plot_images(data_plot, images, stop):
-    for i in range(len(images)):
-        data = images[i]
-        data_plot.show_data(data)
-        print(i, data['image'].size(), LABELS[data['label']])
-        # Only display the first 3 images
-        if i == stop:
-            break
+def plot_image_at_index(data_plot, data_loader, index):
+
+    data = data_loader[index]
+    data_plot.show_data(data)
+    print(index, data['image'].size(), LABELS[data['label']])
+    # Only display the first X images
+
 
 def plot_set(data_set, data_plot, stop, batch_stop):
     """
@@ -181,39 +180,33 @@ def string_to_float(arrays):
 
     return arrays
 
-def get_correct_incorrect(predictions, data_set, batch_size):
+def get_correct_incorrect(predictions, data_loader, test_indexs, threshold=-1.0):
 
     predictions = deepcopy(predictions)
 
     correct = []
     incorrect = []
+    uncertain = []
     wrong = right = total = 0
 
-    for i_batch, sample_batch in enumerate(tqdm(data_set)):
+    for index in test_indexs:
 
-        label_batch = sample_batch['label']
-
-        for i in range(0, batch_size):
-            # Try catch for the last batch, which wont be perfectly of size BATCH_SIZE
-            try:
-                temp = predictions[total].pop()
-                answer = np.argmax(predictions[total])
-                real_answer = label_batch[i]
-            except:
-                break
+        uncertainty = predictions[total].pop()
+        answer = np.argmax(predictions[total])
+        real_answer = data_loader.get_label(index)
 
 
-            if answer == real_answer:
-                correct.append([answer, temp])
-                right += 1
-            else:
-                incorrect.append([answer, temp])
-                wrong += 1
-            total += 1
+        if uncertainty <= threshold:
+            uncertain.append([answer, uncertainty])
+        elif answer == real_answer:
+            correct.append([answer, uncertainty])
+            right += 1
+        else:
+            incorrect.append([answer, uncertainty])
+            wrong += 1
+        total += 1
 
-    print(f"Accuracy: {(right/total) * 100}")
-
-    return correct, incorrect
+    return correct, incorrect, uncertain
 
 def confusion_array(arrays):
 

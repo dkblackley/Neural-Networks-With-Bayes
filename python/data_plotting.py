@@ -4,8 +4,10 @@ File used to plot various data with matplotlib
 
 from __future__ import print_function, division
 import torch
+import helper
 import matplotlib.pyplot as plt
 from torchvision import transforms
+from tqdm import tqdm
 import seaborn as sn
 import pandas as pd
 from copy import deepcopy
@@ -132,7 +134,7 @@ class DataPlotting:
         plt.savefig(f"saved_model/{title}.png")
         plt.show()
 
-    def plot_risk_coverage(self, predictions_mc, predictions_softmax, title):
+    def plot_risk_coverage(self, predictions_mc_original, predictions_softmax_original, title, test_data, test_indexs):
         """
         Plots a risk coverage curve, showing risk in % on the y-axis showing the risk that the predicitions might be
         wrong and coverage % on the x-axis that plots the % of the dataset that has been included to get that risk
@@ -141,28 +143,50 @@ class DataPlotting:
         :param title: Title of the plot
         :return:
         """
-        predictions_mc = deepcopy(predictions_mc)
-        predictions_softmax = deepcopy(predictions_softmax)
-        mc_entropies = []
-        sm_entropies = []
+        predictions_mc = deepcopy(predictions_mc_original)
+        predictions_softmax = deepcopy(predictions_softmax_original)
+        mc_accuracies = []
+        sm_accuracies = []
         coverage = []
-        i = 0
-        for array in predictions_mc:
-            i = i + 1
-            mc_entropies.append(array.pop())
-            coverage.append(i/len(predictions_mc))
+        entropies_mc = []
+        entropies_sm = []
 
-        for array in predictions_softmax:
-            sm_entropies.append(array.pop())
 
-        mc_entropies.sort()
-        sm_entropies.sort()
+        for i in range(0, len(predictions_softmax)):
+            entropies_sm.append(predictions_softmax[i].pop())
+            entropies_mc.append(predictions_mc[i].pop())
 
-        plt.plot(coverage, mc_entropies, label="MC Dropout")
-        plt.plot(coverage, sm_entropies, label="Softmax response")
+        predictions_mc = deepcopy(predictions_mc_original)
+        predictions_softmax = deepcopy(predictions_softmax_original)
+
+        entropies_mc.sort()
+        entropies_sm.sort()
+
+        for i in tqdm(range(0, len(test_data))):
+            correct_mc, incorrect_mc, uncertain_mc = helper.get_correct_incorrect(predictions_mc, test_data,
+                                                                                  test_indexs, threshold=entropies_mc.pop())
+
+            correct_sr, incorrect_sr, uncertain_mc = helper.get_correct_incorrect(predictions_softmax, test_data,
+                                                                                  test_indexs, threshold=entropies_sm.pop())
+
+            if incorrect_sr and correct_sr:
+                sm_accuracies.append((len(incorrect_sr) / (len(correct_sr) + len(incorrect_sr))) * 100)
+            else:
+                sm_accuracies.append(0)
+
+            if correct_mc and incorrect_mc:
+                mc_accuracies.append((len(incorrect_mc) / (len(correct_mc) + len(incorrect_mc))) * 100)
+            else:
+                mc_accuracies.append(0)
+
+            coverage.append((i/len(test_data)))
+
+
+        plt.plot(coverage, mc_accuracies, label="MC Dropout")
+        plt.plot(coverage, sm_accuracies, label="Softmax response")
         plt.title(title)
         plt.xlabel("Coverage")
-        plt.ylabel("Risk")
+        plt.ylabel("Innaccuracy")
         plt.legend(loc='best')
 
         plt.savefig("saved_model/risk_curve.png")
@@ -170,22 +194,27 @@ class DataPlotting:
 
     def plot_correct_incorrect_uncertainties(self, correct, incorrect, title):
 
-        predictions = []
+        correct_preds = []
+        incorrect_preds = []
         correct = deepcopy(correct)
         incorrect = deepcopy(incorrect)
         i = 0
 
         for pred in correct:
-            predictions.append([pred.pop(), i/(len(correct) + len(incorrect)), "Correct"])
+            correct_preds.append(pred.pop())
             i = i + 1
 
         for pred in incorrect:
-            predictions.append([pred.pop(), i/(len(correct) + len(incorrect)), "Incorrect"])
+            incorrect_preds.append(pred.pop())
             i = i + 1
 
-        correct_incorrect = pd.DataFrame(predictions, columns=['Entropy', "Density", "Classification"])
+        plt.hist(correct_preds, alpha=0.5, label="Correct")
+        plt.hist(incorrect_preds, alpha=0.5, label="Incorrect")
 
-        sn.displot(correct_incorrect, x="Entropy", hue="Classification", kind="kde", fill=True)
+        plt.xlabel("Entropy")
+        plt.ylabel("Samples")
+        plt.legend(loc='best')
+
         plt.title(title)
 
         plt.savefig(f"saved_model/{title}.png")
