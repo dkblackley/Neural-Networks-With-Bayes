@@ -160,11 +160,6 @@ def read_rows(filname):
 
     return arrays
 
-def predictions_to_confusion(predictions):
-    confusion = []
-
-    for pred in predictions:
-        pass
 
 def float_to_string(arrays):
 
@@ -179,6 +174,61 @@ def string_to_float(arrays):
             arrays[c][i] = float(arrays[c][i])
 
     return arrays
+
+def get_cost(answer, real_answer, num_classes=8):
+
+    """cost_matrix = [[0, 10, 10, 10, 10, 10, 10, 0],
+                  [150, 0, 30, 20, 0, 0, 20, 150],
+                  [10, 10, 0, 0, 10, 10, 0, 10],
+                  [10, 10, 0, 0, 10, 10, 0, 10],
+                  [150, 0, 30, 20, 0, 0, 20, 150],
+                  [150, 0, 30, 20, 0, 0, 20, 150],
+                  [10, 10, 0, 0, 10, 10, 0, 10],
+                  [0, 10, 10, 10, 10, 10, 10, 0]]"""
+
+    """    cost_matrix = [[1, 10, 10, 10, 10, 10, 10, 1],
+                   [150, 1, 30, 20, 1, 1, 20, 150],
+                   [10, 10, 1, 1, 10, 10, 1, 10],
+                   [10, 10, 1, 1, 10, 10, 1, 10],
+                   [150, 1, 30, 20, 1, 1, 20, 150],
+                   [150, 1, 30, 20, 1, 1, 20, 150],
+                   [10, 10, 1, 1, 10, 10, 1, 10],
+                   [1, 10, 10, 10, 10, 10, 10, 1]]"""
+
+    """cost_matrix = [[0.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 0.1],
+                   [15.1, 0.1, 3.1, 2.1, 0.1, 0.1, 2.1, 15.1],
+                   [1.1, 1.1, 0.1, 0.1, 1.1, 1.1, 0.1, 1.1],
+                   [1.1, 1.1, 0.1, 0.1, 1.1, 1.1, 0.1, 1.1],
+                   [15.1, 0.1, 3.1, 2.1, 0.1, 0.1, 2.1, 15.1],
+                   [15.1, 0.1, 3.1, 2.1, 0.1, 0.1, 2.1, 15.1],
+                   [1.1, 1.1, 0.1, 0.1, 1.1, 1.1, 0.1, 1.1],
+                   [0.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 0.1]]"""
+
+    """cost_matrix = [[1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1],
+                   [15.1, 1, 3.1, 2.1, 1, 1, 2.1, 15.1],
+                   [1.1, 1.1, 1, 1, 1.1, 1.1, 1, 1.1],
+                   [1.1, 1.1, 1, 1, 1.1, 1.1, 1, 1.1],
+                   [15.1, 1, 3.1, 2.1, 1, 1, 2.1, 15.1],
+                   [15.1, 1, 3.1, 2.1, 1, 1, 2.1, 15.1],
+                   [1.1, 1.1, 1, 1, 1.1, 1.1, 1, 1.1],
+                   [1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1]]"""
+
+    cost_matrix = [[1, 10, 10, 10, 10, 10, 10, 1],
+                   [150, 1, 30, 20, 1, 1, 20, 150],
+                   [10, 10, 1, 1, 10, 10, 1, 10],
+                   [10, 10, 1, 1, 10, 10, 1, 10],
+                   [150, 1, 30, 20, 1, 1, 20, 150],
+                   [150, 1, 30, 20, 1, 1, 20, 150],
+                   [10, 10, 1, 1, 10, 10, 1, 10],
+                   [1, 10, 10, 10, 10, 10, 10, 1]]
+
+    cost = torch.tensor(cost_matrix[answer.item()][real_answer.item()])
+
+
+    return cost
+
+
+
 
 def get_correct_incorrect(predictions, data_loader, test_indexs, threshold=-1.0):
 
@@ -221,3 +271,26 @@ def confusion_array(arrays):
         new_arrays.append(new_array)
 
     return new_arrays
+
+
+def make_confusion_matrix(predictions, data_loader, test_indexes, threshold=-1.0):
+    predictions = deepcopy(predictions)
+
+    confusion_matrix = []
+
+    for i in range(8):
+        confusion_matrix.append([0, 0, 0, 0, 0, 0, 0, 0])
+
+    total = 0
+
+    for index in test_indexes:
+
+        predictions[total].pop()
+        answer = np.argmax(predictions[total])
+        real_answer = data_loader.get_label(index)
+
+        confusion_matrix[real_answer][answer] += 1
+
+        total += 1
+
+    return confusion_matrix

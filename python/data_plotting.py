@@ -110,7 +110,7 @@ class DataPlotting:
         plt.savefig("saved_model/accuracy.png")
         plt.show()
 
-    def plot_confusion(self, array, title):
+    def plot_confusion(self, array, root_dir, title):
         """
         Plots a confusion matrix
         :param title: title for the plot
@@ -131,10 +131,13 @@ class DataPlotting:
         sn.heatmap(df_cm, annot=True, annot_kws={"size": 16}, fmt=form, cmap="YlGnBu") # font size
         plt.title(title)
 
-        plt.savefig(f"saved_model/{title}.png")
+        plt.xlabel("True label")
+        plt.ylabel("Predicted label")
+
+        plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
-    def plot_risk_coverage(self, predictions_mc_original, predictions_softmax_original, title, test_data, test_indexs):
+    def plot_risk_coverage(self, predictions_mc_original, predictions_softmax_original, root_dir, title, test_data, test_indexs):
         """
         Plots a risk coverage curve, showing risk in % on the y-axis showing the risk that the predicitions might be
         wrong and coverage % on the x-axis that plots the % of the dataset that has been included to get that risk
@@ -162,7 +165,12 @@ class DataPlotting:
         entropies_mc.sort()
         entropies_sm.sort()
 
-        for i in tqdm(range(0, len(test_data))):
+        sm_accuracies.append(0)
+        mc_accuracies.append(0)
+
+        coverage.append(0.0)
+
+        for i in tqdm(range(0, len(test_indexs))):
             correct_mc, incorrect_mc, uncertain_mc = helper.get_correct_incorrect(predictions_mc, test_data,
                                                                                   test_indexs, threshold=entropies_mc.pop())
 
@@ -170,29 +178,36 @@ class DataPlotting:
                                                                                   test_indexs, threshold=entropies_sm.pop())
 
             if incorrect_sr and correct_sr:
-                sm_accuracies.append((len(incorrect_sr) / (len(correct_sr) + len(incorrect_sr))) * 100)
+                sm_accuracies.append((len(incorrect_sr) / len(test_indexs)) * 100)
             else:
                 sm_accuracies.append(0)
 
             if correct_mc and incorrect_mc:
-                mc_accuracies.append((len(incorrect_mc) / (len(correct_mc) + len(incorrect_mc))) * 100)
+                mc_accuracies.append((len(incorrect_mc) / len(test_indexs)) * 100)
             else:
                 mc_accuracies.append(0)
 
-            coverage.append((i/len(test_data)))
+            coverage.append((i/len(test_indexs)))
+
+
+
+        helper.write_csv(mc_accuracies, root_dir + "MC_risk_coverage.csv")
+        helper.write_csv(sm_accuracies, root_dir + "SM_risk_coverage.csv")
 
 
         plt.plot(coverage, mc_accuracies, label="MC Dropout")
         plt.plot(coverage, sm_accuracies, label="Softmax response")
+        maxi = max([max(mc_accuracies) + 10, max(mc_accuracies) + 10])
+        plt.ylim([0, maxi])
         plt.title(title)
         plt.xlabel("Coverage")
-        plt.ylabel("Innaccuracy")
+        plt.ylabel("Innaccuracy (%)")
         plt.legend(loc='best')
 
-        plt.savefig("saved_model/risk_curve.png")
+        plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
-    def plot_correct_incorrect_uncertainties(self, correct, incorrect, title):
+    def plot_correct_incorrect_uncertainties(self, correct, incorrect, root_dir, title):
 
         correct_preds = []
         incorrect_preds = []
@@ -217,10 +232,10 @@ class DataPlotting:
 
         plt.title(title)
 
-        plt.savefig(f"saved_model/{title}.png")
+        plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
-    def average_uncertainty_by_class(self, correct, incorrect, title):
+    def average_uncertainty_by_class(self, correct, incorrect, root_dir, title):
 
         labels_accuracy = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
         labels_entropies = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
@@ -263,5 +278,5 @@ class DataPlotting:
         plt.xlabel("Average Entropy")
         plt.ylabel("Accuracy")
         plt.title(title)
-        plt.savefig(f"saved_model/{title}.png")
+        plt.savefig(f"{root_dir + title}.png")
         plt.show()

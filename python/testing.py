@@ -130,24 +130,29 @@ def softmax_pred(data_set, network, n_classes):
         for output in outputs:
             predictions = np.vstack((predictions, output.cpu().numpy()))
 
-    epsilon = sys.float_info.min
-    entropies = -np.sum(predictions*np.log10(predictions + epsilon), axis=-1)
+    """    epsilon = sys.float_info.min
+    entropies = -np.sum(predictions*np.log2(predictions + epsilon), axis=-1)
 
     predictions = predictions.tolist()
     entropies = entropies.tolist()
 
     for i in range(0, len(entropies)):
-        entropies[i] = (entropies[i] - min(entropies)) / (max(entropies) - min(entropies))
+        entropies[i] = (entropies[i] - min(entropies)) / (max(entropies) - min(entropies))"""
 
-    i = 0
+    predictions = predictions.tolist()
+
+    for pred in predictions:
+        pred.append(1 - max(pred))
+
+    #i = 0
     for preds in predictions:
 
-        preds.append(entropies[i])
+        #preds.append(entropies[i])
 
         for c in range(0, len(preds)):
             preds[c] = '{:.17f}'.format(preds[c])
 
-        i = i + 1
+        #i = i + 1
 
     return predictions
 
@@ -160,12 +165,12 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes):
     soft_max = nn.Softmax(dim=1)
     drop_predictions = np.empty((0, n_samples, n_classes))
 
-    for i in range(0, forward_passes):
-        print(f"\n\n Forward pass {i + 1} of {forward_passes}\n")
+    for i in tqdm(range(0, forward_passes)):
+
         predictions = np.empty((0, n_classes))
 
 
-        for i_batch, sample_batch in enumerate(tqdm((data_set), position=0, leave=True)):
+        for i_batch, sample_batch in enumerate(data_set):
             image_batch = sample_batch['image']
 
             with torch.no_grad():
@@ -208,7 +213,10 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes):
     mean = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
 
     mean = mean.tolist()
-    entropies = [i[n_classes] for i in mean]
+    entropies = [c[n_classes - 1] for c in mean]
+
+    for c in range(0, len(entropies)):
+        entropies[c] = (entropies[c] - min(entropies)) / (max(entropies) - min(entropies))
 
     for c in range(0, len(mean)):
         mean[c][n_classes - 1] = entropies[c]

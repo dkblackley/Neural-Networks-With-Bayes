@@ -18,11 +18,11 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 0
+EPOCHS = 25
 UNKNOWN_CLASS = False
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
-BATCH_SIZE = 32
+BATCH_SIZE = 1
 SOFTMAX = True
 MC_DROPOUT = False
 FORWARD_PASSES = 100
@@ -64,32 +64,8 @@ composed_test = transforms.Compose([
                                 transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
                                ])
 
-"""composed_train = transforms.Compose([
-                                transforms.Resize((image_size, image_size), Image.LANCZOS),
-                                transforms.ToTensor()
-                               ])"""
-
-"""composed_test = transforms.Compose([
-                                transforms.Resize(image_size),
-                                transforms.ColorJitter(brightness=0.2),
-                                transforms.RandomVerticalFlip(),
-                                transforms.RandomHorizontalFlip(),
-                                transforms.RandomAffine(0, shear=image_percent/image_size),
-                                transforms.ToTensor(),
-                                # call helper.get_mean_and_std(data_set) to get mean and std
-                                transforms.Normalize(mean=[0.6786, 0.5344, 0.5273], std=[0.2062, 0.1935, 0.2064])
-                               ])"""
-
 train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_train)
-train_data.count_classes()
 test_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_test)
-#test_data = data_loading.data_set("Test_meta_data/ISIC_2019_Test_Metadata.csv", "ISIC_2019_Test_Input", transforms=composed_test)
-
-
-
-"""weights = list(train_data.count_classes().values())
-weights.pop()  # Remove the Unknown class"""
-
 
 
 def get_data_sets(plot=False):
@@ -183,11 +159,13 @@ for weight in weights:
 
 #weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
 
+#new_weights = helper.apply_cost_matrix()
+
 class_weights = torch.Tensor(new_weights).to(device)
 loss_function = nn.CrossEntropyLoss(weight=class_weights)
 
 
-def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy, verbose=False):
+def train(cost_matrix, current_epoch, val_losses, train_losses, val_accuracy, train_accuracy, verbose=False):
     """
     trains the network while also recording the accuracy of the network on the training data
     :param verboose: If true dumps out debug info about which classes the network is predicting when correct and incorrect
@@ -230,6 +208,13 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
             optim.zero_grad()
             outputs = network(image_batch, dropout=True)
             loss = loss_function(outputs, label_batch)
+
+            if cost_matrix:
+
+                for output in outputs:
+                    cost = helper.get_cost(torch.argmax(output), label_batch[0])
+                    loss = loss * cost
+
             loss.backward()
             optim.step()
 
@@ -294,6 +279,7 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
 
     data_plot.plot_loss(intervals, val_losses, train_losses)
     data_plot.plot_validation(intervals, val_accuracy, train_accuracy)
+    save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, "saved_model/")
 
     return intervals, val_losses, train_losses, val_accuracy, train_accuracy
 
@@ -398,53 +384,54 @@ def load_net(root_dir, output_size):
     return network, optim, len(train_losses), val_losses, train_losses, val_accuracies, train_accuracies
 
 
-def train_net(starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[], train_accuracies=[]):
+def train_net(root_dir, cost_matrix=True, starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[], train_accuracies=[]):
     """
     Trains a network, saving the parameters and the losses/accuracies over time
     :return:
     """
     starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(
-        starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies, verbose=True)
+        cost_matrix, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies, verbose=True)
 
     if not DEBUG:
 
         if UNKNOWN_CLASS:
+            # could replace with a for loop
             predictions_sr = testing.predict(val_set, network, val_size, softmax=True)
             confusion_matrix = helper.predictions_to_confusion()
-            data_plot.plot_confusion(confusion_matrix, "Validation Set")
+            data_plot.plot_confusion(confusion_matrix, root_dir, "Validation Set")
             confusion_matrix = helper.confusion_array(confusion_matrix)
-            data_plot.plot_confusion(confusion_matrix, "Validation Set Normalized")
+            data_plot.plot_confusion(confusion_matrix, root_dir, "Validation Set Normalized")
 
             _, __, confusion_matrix = test(train_set, verbose=True)
-            data_plot.plot_confusion(confusion_matrix, "Training Set")
+            data_plot.plot_confusion(confusion_matrix, root_dir, "Training Set")
             confusion_matrix = helper.confusion_array(confusion_matrix)
-            data_plot.plot_confusion(confusion_matrix, "Training Set Normalized")
+            data_plot.plot_confusion(confusion_matrix, root_dir, "Training Set Normalized")
 
             _, __, confusion_matrix = test(test_set, verbose=True)
-            data_plot.plot_confusion(confusion_matrix, "Testing Set")
+            data_plot.plot_confusion(confusion_matrix, root_dir, "Testing Set")
             confusion_matrix = helper.confusion_array(confusion_matrix)
-            data_plot.plot_confusion(confusion_matrix, "Testing Set Normalized")
+            data_plot.plot_confusion(confusion_matrix, root_dir, "Testing Set Normalized")
         else:
             _, __, confusion_matrix = test(val_set, verbose=True)
-            data_plot.plot_confusion(confusion_matrix, "Validation Set")
+            data_plot.plot_confusion(confusion_matrix, root_dir, "Validation Set")
             confusion_matrix = helper.confusion_array(confusion_matrix)
-            data_plot.plot_confusion(confusion_matrix, "Validation Set Normalized")
+            data_plot.plot_confusion(confusion_matrix, root_dir, "Validation Set Normalized")
 
             _, __, confusion_matrix = test(train_set, verbose=True)
-            data_plot.plot_confusion(confusion_matrix, "Training Set")
+            data_plot.plot_confusion(confusion_matrix, root_dir, "Training Set")
             confusion_matrix = helper.confusion_array(confusion_matrix)
-            data_plot.plot_confusion(confusion_matrix, "Training Set Normalized")
+            data_plot.plot_confusion(confusion_matrix, root_dir, "Training Set Normalized")
 
             _, __, confusion_matrix = test(test_set, verbose=True)
-            data_plot.plot_confusion(confusion_matrix, "Testing Set")
+            data_plot.plot_confusion(confusion_matrix, root_dir, "Testing Set")
             confusion_matrix = helper.confusion_array(confusion_matrix)
-            data_plot.plot_confusion(confusion_matrix, "Testing Set Normalized")
+            data_plot.plot_confusion(confusion_matrix, root_dir, "Testing Set Normalized")
 
 
     return val_losses, train_losses, val_accuracies, train_accuracies
 
 
-def print_metrics():
+def print_metrics(model_name):
 
     correct_mc, incorrect_mc, uncertain_mc = helper.get_correct_incorrect(predictions_mc, test_data, test_indexs)
     print(f"MC Accuracy: {len(correct_mc)/(len(correct_mc) + len(incorrect_mc)) * 100}")
@@ -452,44 +439,61 @@ def print_metrics():
     correct_sr, incorrect_sr, uncertain_sr = helper.get_correct_incorrect(predictions_softmax, test_data, test_indexs)
     print(f"SM Accuracy: {len(correct_sr) / (len(correct_sr) + len(incorrect_sr)) * 100}")
 
-    data_plot.plot_risk_coverage(predictions_mc, predictions_softmax, "Risk Coverage", test_data, test_indexs)
-    data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, "MC Dropout")
-    data_plot.plot_correct_incorrect_uncertainties(correct_sr, incorrect_sr, "Softmax Response")
-    data_plot.average_uncertainty_by_class(correct_mc, incorrect_mc, "MC Dropout Accuracies by Class")
-    data_plot.average_uncertainty_by_class(correct_sr, incorrect_sr, "Softmax Response Accuracies by Class")
+    data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, model_name, "MC Dropout")
+    data_plot.plot_correct_incorrect_uncertainties(correct_sr, incorrect_sr, model_name, "Softmax Response")
+
+    data_plot.average_uncertainty_by_class(correct_mc, incorrect_mc, model_name, "MC Dropout Accuracies by Class")
+    data_plot.average_uncertainty_by_class(correct_sr, incorrect_sr, model_name, "Softmax Response Accuracies by Class")
+
+    data_plot.plot_risk_coverage(predictions_mc, predictions_softmax, model_name, "Risk Coverage", test_data,
+                                 test_indexs)
+
+#model_name = "best_model/"
+#model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
+model_name = "saved_model/"
 
 
-#train_net()
+train_net(model_name, cost_matrix=True)
 #helper.plot_samples(train_data, data_plot)
 
+network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(model_name, 8)
 # network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/", 8)
 
 #test(val_set, verbose=True)
 
-"""train_net(starting_epoch=starting_epoch,
+"""train_net(model_name,
+          cost_matrix=True,
+          starting_epoch=starting_epoch,
           val_losses=val_losses,
           train_losses=train_losses,
           val_accuracies=val_accuracies,
-          train_accuracies=train_accuracies)"""
-
-model_name = "best_model/"
-#model_name = "saved_model/"
-
-network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(model_name, 8)
-
-#predictions_softmax = testing.predict(test_set, network, test_size, softmax=True)
-#helper.write_rows(predictions_softmax, model_name + "softmax_predictions.csv")
-
-"""predictions_mc = testing.predict(test_set, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
-helper.write_rows(predictions_mc, "saved_model/mc_predictions.csv")
+          train_accuracies=train_accuracies)
 """
 
+"""
+predictions_softmax = testing.predict(test_set, network, test_size, softmax=True)
+helper.write_rows(predictions_softmax, model_name + "softmax_predictions.csv")
+
+predictions_mc = testing.predict(test_set, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
+helper.write_rows(predictions_mc, model_name + "mc_predictions.csv")"""
+
 predictions_softmax = helper.read_rows(model_name + "softmax_predictions.csv")
-predictions_mc = helper.read_rows(model_name + "mc_forward_pass_99_predictions.csv")
+predictions_mc = helper.read_rows(model_name + "mc_predictions.csv")
 
 predictions_softmax = helper.string_to_float(predictions_softmax)
 predictions_mc = helper.string_to_float(predictions_mc)
 
-print_metrics()
+confusion_matrix = helper.make_confusion_matrix(predictions_softmax, test_data, test_indexs)
+data_plot.plot_confusion(confusion_matrix, model_name, "Test Set without Cost")
+confusion_matrix = helper.confusion_array(confusion_matrix)
+data_plot.plot_confusion(confusion_matrix, model_name, "Test Set without Cost")
+
+
+confusion_matrix = helper.make_confusion_matrix(predictions_softmax, test_data, test_indexs)
+data_plot.plot_confusion(confusion_matrix, model_name, "Test Set with Cost")
+confusion_matrix = helper.confusion_array(confusion_matrix)
+data_plot.plot_confusion(confusion_matrix, model_name, "Test Set with Cost")
+
+print_metrics(model_name)
 
 
