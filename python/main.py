@@ -178,6 +178,8 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
     training accuracy per epoch
     """
 
+    input("Did you remember to move the saved model before plugging in the best model?")
+
     intervals = []
     if not val_accuracy:
         best_val = 0

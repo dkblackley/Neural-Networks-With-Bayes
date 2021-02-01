@@ -4,15 +4,15 @@ File responsible for holding the model, uses efficientnet
 import torch
 import torch.nn as nn
 from torch.nn import functional as TF
-import math
 from efficientnet_pytorch import EfficientNet
+import BBB
 
 
 class Classifier(nn.Module):
     """
     Class that holds and runs the efficientnet CNN
     """
-    def __init__(self, image_size, output_size, dropout=0.5):
+    def __init__(self, image_size, output_size, dropout=0.5, BBB=False):
         """
         init function sets the type of efficientnet and any extra layers
         :param dropout: rate for dropout
@@ -29,12 +29,15 @@ class Classifier(nn.Module):
             encoder_size = self.model.extract_features(temp_input).shape[1]
 
         # Initialises the classification head for generating predictions.
-
         self.efficient_net_output = nn.Linear(encoder_size, 512)
-        self.hidden_layer = nn.Linear(512, 512)
+
+        if BBB:
+            self.hidden_layer = BBB.BayesianLayer(512, 512)
+        else:
+            self.hidden_layer = nn.Linear(512, 512)
         self.output_layer = nn.Linear(512, output_size)
 
-    def forward(self, input, dropout=False):
+    def forward(self, input, dropout=False, sample=False):
         """
         Method for handling a forward pass though the network, applies dropout using nn.functional
         :param input: input batch to be processed
@@ -49,34 +52,46 @@ class Classifier(nn.Module):
             output = TF.dropout(output, self.drop_rate)
             output = self.efficient_net_output(output)
             output = TF.dropout(output, self.drop_rate)
-            output = self.hidden_layer(output)
+
+            if BBB:
+                output = self.hidden_layer(output, sample)
+            else:
+                output = self.hidden_layer(output)
+
             output = TF.dropout(output, self.drop_rate)
         else:
             output = self.efficient_net_output(output)
-            output = self.hidden_layer(output)
+
+            if BBB:
+                output = self.hidden_layer(output, sample)
+            else:
+                output = self.hidden_layer(output)
 
         output = self.output_layer(output)
         return output
 
-# Credit to https://www.nitarshan.com/bayes-by-backprop/, Used to create code and follow through the steps of BBB paper
-class GaussianDistribution(object):
+    #Methods for BBB
+    def log_prior(self):
+        return self.hidden_layer.log_prior
 
-    def __init__(self, mu, rho):
-        super.__init__()
-        self.mu = mu
-        self.rho = rho
-        self.normal = torch.distributions.Normal(0, 1)
+    def log_varaitional_posterior(self):
+        return self.hidden_layer.log_varational_posterior
 
-    @property
-    def sigma(self):
-        return torch.log1p(torch.exp(self.rho))
+    def sample_elbo(self, input, target, batch_size, n_classes, num_batches, samples=SAMPLES):
 
-    def sample_distribution(self):
-        e = self.normal.sample(self.rho.size())
+        outputs = torch.zeros(samples, batch_size, n_classes)
+        log_priors = torch.zeros(samples)
+        log_variational_posteriors = torch.zeros(samples)
 
-        return self.mu + self.sigma * e
+        for i in range(samples):
+            outputs[i] = self(input, sample=True)
+            log_priors[i] = self.log_prior()
+            log_variational_posteriors[i] = self.log_variational_posterior()
 
-    def log_probability(self, input):
-        return  (-math.log(math.sqrt(2 * math.pi))
-                 - torch.log(self.sigma)
-                 - ((input - self.mu ** 2) / (2 * self.sigma ** 2)).sum())
+        log_prior = log_priors.mean()
+        log_variational_posterior = log_variational_posteriors.mean()
+        negative_log_likelihood = TF.nll_loss(outputs.mean(0), target, size_average=False)
+        loss = (log_variational_posterior - log_prior) / num_batches + negative_log_likelihood
+        return loss
+
+

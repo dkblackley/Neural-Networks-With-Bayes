@@ -11,6 +11,7 @@ import torch.optim as optimizer
 from copy import deepcopy
 import numpy as np
 
+
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
 
 def plot_image_at_index(data_plot, data_loader, index):
@@ -342,3 +343,8 @@ def make_confusion_matrix(predictions, data_loader, test_indexes, threshold=-1.0
         total += 1
 
     return confusion_matrix
+
+
+
+
+
