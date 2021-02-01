@@ -7,17 +7,19 @@ import torch
 import model
 from tqdm import tqdm
 import csv
+import torch.optim as optimizer
+from copy import deepcopy
+import numpy as np
 
-LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
+LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
 
-def plot_images(data_plot, images, stop):
-    for i in range(len(images)):
-        data = images[i]
-        data_plot.show_data(data)
-        print(i, data['image'].size(), LABELS[data['label']])
-        # Only display the first 3 images
-        if i == stop:
-            break
+def plot_image_at_index(data_plot, data_loader, index):
+
+    data = data_loader[index]
+    data_plot.show_data(data)
+    print(index, data['image'].size(), LABELS[data['label']])
+    # Only display the first X images
+
 
 def plot_set(data_set, data_plot, stop, batch_stop):
     """
@@ -35,15 +37,30 @@ def plot_set(data_set, data_plot, stop, batch_stop):
             break
 
 
-def save_net(network, PATH):
-    torch.save(network.state_dict(), PATH)
+def save_net(net, optim, PATH):
+    states = {'network': net.state_dict(),
+             'optimizer': optim.state_dict()}
+    torch.save(states, PATH)
 
+def change_to_device(network, optim, device):
+    network = network.to(device)
 
-def load_net(PATH, image_size):
-    net = model.Classifier(image_size)
-    net.load_state_dict(torch.load(PATH))
-    net.eval()
-    return net
+    for state in optim.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.to(device)
+
+    return network, optim
+
+def load_net(PATH, image_size, output_size):
+    net = model.Classifier(image_size, output_size)
+    optim = optimizer.Adam(net.parameters(), lr=0.001)
+    states = torch.load(PATH)
+
+    optim.load_state_dict(states['optimizer'])
+    net.load_state_dict(states['network'])
+    net.train()
+    return net, optim
 
 def get_mean_and_std(data_set):
     """
@@ -97,6 +114,32 @@ def write_csv(list_to_write, filename):
         writer = csv.writer(f)
         writer.writerow(list_to_write)
 
+def count_classes(dataset, batch_size):
+    LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
+    labels_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
+    print("\nCounting labels")
+
+    for i_batch, sample_batch in enumerate(tqdm(dataset)):
+        labels_batch = sample_batch['label']
+        for i in range(len(labels_batch)):
+            label = labels_batch[i].item()
+            label = LABELS[label]
+            try:
+                labels_count[label] += 1
+            except Exception as e:
+                continue
+
+    print(labels_count)
+
+    for label, count in labels_count.items():
+        print(f"{label}: {round(count / (len(dataset) * batch_size) * 100, 3)}%")
+    temp = labels_count.values()
+    temp = list(temp)
+    temp = sum(temp)
+    print(f"Total number of samples in the set is: {temp}")
+
+    return labels_count
+
 def write_rows(list_to_write, filename):
     """
     writes a list of items to a output file, used mainly for saving loss and accuracy values
@@ -108,3 +151,194 @@ def write_rows(list_to_write, filename):
     with open(filename, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerows(list_to_write)
+
+def read_rows(filname):
+
+    with open(filname, 'r', newline='') as f:
+        reader = csv.reader(f)
+        arrays = list(reader)
+
+    return arrays
+
+
+def float_to_string(arrays):
+
+    for c in range(0, len(arrays)):
+        arrays[c] = '{:.17f}'.format(arrays[c])
+
+    return arrays
+
+def string_to_float(arrays):
+    for c in range(0, len(arrays)):
+        for i in range(0, len(arrays[c])):
+            arrays[c][i] = float(arrays[c][i])
+
+    return arrays
+
+def normalize_matrix(matrix, min_val=0, max_val=150):
+
+    for array in matrix:
+        for i in range(0, len(array)):
+
+            if array[i] != 1:
+                array[i] = 1 + ((array[i] - min_val) / (max_val - min_val))
+
+
+
+
+    return matrix
+
+
+def get_cost(answer, real_answer, num_classes=8):
+
+    """cost_matrix = [[0, 10, 10, 10, 10, 10, 10, 0],
+                  [150, 0, 30, 20, 0, 0, 20, 150],
+                  [10, 10, 0, 0, 10, 10, 0, 10],
+                  [10, 10, 0, 0, 10, 10, 0, 10],
+                  [150, 0, 30, 20, 0, 0, 20, 150],
+                  [150, 0, 30, 20, 0, 0, 20, 150],
+                  [10, 10, 0, 0, 10, 10, 0, 10],
+                  [0, 10, 10, 10, 10, 10, 10, 0]]"""
+
+    """    cost_matrix = [[1, 10, 10, 10, 10, 10, 10, 1],
+                   [150, 1, 30, 20, 1, 1, 20, 150],
+                   [10, 10, 1, 1, 10, 10, 1, 10],
+                   [10, 10, 1, 1, 10, 10, 1, 10],
+                   [150, 1, 30, 20, 1, 1, 20, 150],
+                   [150, 1, 30, 20, 1, 1, 20, 150],
+                   [10, 10, 1, 1, 10, 10, 1, 10],
+                   [1, 10, 10, 10, 10, 10, 10, 1]]"""
+
+    """cost_matrix = [[0.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 0.1],
+                   [15.1, 0.1, 3.1, 2.1, 0.1, 0.1, 2.1, 15.1],
+                   [1.1, 1.1, 0.1, 0.1, 1.1, 1.1, 0.1, 1.1],
+                   [1.1, 1.1, 0.1, 0.1, 1.1, 1.1, 0.1, 1.1],
+                   [15.1, 0.1, 3.1, 2.1, 0.1, 0.1, 2.1, 15.1],
+                   [15.1, 0.1, 3.1, 2.1, 0.1, 0.1, 2.1, 15.1],
+                   [1.1, 1.1, 0.1, 0.1, 1.1, 1.1, 0.1, 1.1],
+                   [0.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 0.1]]"""
+
+    """cost_matrix = [[1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1],
+                   [15.1, 1, 3.1, 2.1, 1, 1, 2.1, 16.5],
+                   [1.1, 1.1, 1, 1, 1.1, 1.1, 1, 1.1],
+                   [1.1, 1.1, 1, 1, 1.1, 1.1, 1, 1.1],
+                   [16.5, 1, 3.3, 2.2, 1, 1, 2.2, 16.5],
+                   [16.5, 1, 3.3, 2.2, 1, 1, 2.2, 16.5],
+                   [1.1, 1.1, 1, 1, 1.1, 1.1, 1, 1.1],
+                   [1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1]]"""
+
+    """    cost_matrix = [[1, 10, 10, 10, 10, 10, 10, 1],
+                   [150, 1, 30, 20, 1, 1, 20, 150],
+                   [10, 10, 1, 1, 10, 10, 1, 10],
+                   [10, 10, 1, 1, 10, 10, 1, 10],
+                   [150, 1, 30, 20, 1, 1, 20, 150],
+                   [150, 1, 30, 20, 1, 1, 20, 150],
+                   [10, 10, 1, 1, 10, 10, 1, 10],
+                   [1, 10, 10, 10, 10, 10, 10, 1]]"""
+    #LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
+
+
+    """cost_matrix = [[0, 150, 10, 10, 150, 150, 10, 0],
+                   [10, 0, 10, 10, 0, 0, 10, 10],
+                   [10, 30, 0, 0, 30, 30, 0, 10],
+                   [10, 20, 0, 0, 20, 20, 0, 10],
+                   [10, 0, 10, 10, 0, 0, 10, 10],
+                   [10, 0, 10, 10, 0, 0, 10, 10],
+                   [10, 20, 0, 0, 20, 20, 0, 10],
+                   [0, 150, 10, 10, 150, 150, 10, 0]]"""
+
+    cost_matrix = [[1, 150, 10, 10, 150, 150, 10, 1],
+                   [10, 1, 10, 10, 1, 1, 10, 10],
+                   [10, 30, 1, 1, 30, 30, 1, 10],
+                   [10, 20, 1, 1, 20, 20, 1, 10],
+                   [10, 1, 10, 10, 1, 1, 10, 10],
+                   [10, 1, 10, 10, 1, 1, 10, 10],
+                   [10, 20, 1, 1, 20, 20, 1, 10],
+                   [1, 150, 10, 10, 150, 150, 10, 1]]
+
+    normalize_matrix(cost_matrix)
+
+    """cost_matrix = [[1, 16.5, 1.1, 1.1, 16.5, 16.5, 1.1, 1],
+                   [1.1, 1, 1.1, 1.1, 1, 1, 1.1, 1.1],
+                   [1.1, 3.3, 1, 1, 3.3, 3.3, 1, 1.1],
+                   [1.1, 2.2, 1, 1, 2.2, 2.2, 1, 1.1],
+                   [1.1, 1, 1.1, 1.1, 1, 1, 1.1, 1.1],
+                   [1.1, 1, 1.1, 1.1, 1, 1, 1.1, 1.1],
+                   [1.1, 2.2, 1, 1, 2.2, 2.2, 1, 1.1],
+                   [1, 16.5, 1.1, 1.1, 16.5, 16.5, 1.1, 1]]"""
+
+
+
+    #cost = torch.tensor(cost_matrix[answer.item()][real_answer.item()])
+    cost = torch.tensor(cost_matrix[real_answer.item()][answer.item()])
+
+
+    return cost
+
+
+
+
+def get_correct_incorrect(predictions, data_loader, test_indexs, threshold=-1.0):
+
+    predictions = deepcopy(predictions)
+
+    correct = []
+    incorrect = []
+    uncertain = []
+    wrong = right = total = 0
+
+    for index in test_indexs:
+
+        uncertainty = predictions[total].pop()
+        answer = np.argmax(predictions[total])
+        real_answer = data_loader.get_label(index)
+
+
+        if uncertainty <= threshold:
+            uncertain.append([answer, uncertainty])
+        elif answer == real_answer:
+            correct.append([answer, uncertainty])
+            right += 1
+        else:
+            incorrect.append([answer, uncertainty])
+            wrong += 1
+        total += 1
+
+    return correct, incorrect, uncertain
+
+def confusion_array(arrays):
+
+    new_arrays = []
+
+    for array in arrays:
+        new_array = []
+
+        for item in array:
+            new_array.append(round(item / (sum(array) + 1), 4))
+
+        new_arrays.append(new_array)
+
+    return new_arrays
+
+
+def make_confusion_matrix(predictions, data_loader, test_indexes, threshold=-1.0):
+    predictions = deepcopy(predictions)
+
+    confusion_matrix = []
+
+    for i in range(8):
+        confusion_matrix.append([0, 0, 0, 0, 0, 0, 0, 0])
+
+    total = 0
+
+    for index in test_indexes:
+
+        predictions[total].pop()
+        answer = np.argmax(predictions[total])
+        real_answer = data_loader.get_label(index)
+
+        confusion_matrix[real_answer][answer] += 1
+
+        total += 1
+
+    return confusion_matrix

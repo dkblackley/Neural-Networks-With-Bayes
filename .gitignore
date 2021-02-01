@@ -148,3 +148,9 @@ python/saved_models
 .idea/
 
 python/temp/
+
+python/best_model/
+
+python/saved_model (copy)/
+
+python/best_loss/

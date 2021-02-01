@@ -12,7 +12,7 @@ class Classifier(nn.Module):
     """
     Class that holds and runs the efficientnet CNN
     """
-    def __init__(self, image_size, dropout=0.5):
+    def __init__(self, image_size, output_size, dropout=0.5):
         """
         init function sets the type of efficientnet and any extra layers
         :param dropout: rate for dropout
@@ -21,18 +21,18 @@ class Classifier(nn.Module):
         self.model = EfficientNet.from_pretrained("efficientnet-b0")
         self.drop_rate = dropout
         self.pool = nn.AdaptiveAvgPool2d(1)
+        self.output_size = output_size
 
         with torch.no_grad():
 
             temp_input = torch.zeros(1, 3, image_size, image_size)
-
-        encoder_size = self.model.extract_features(temp_input).shape[1]
+            encoder_size = self.model.extract_features(temp_input).shape[1]
 
         # Initialises the classification head for generating predictions.
 
         self.efficient_net_output = nn.Linear(encoder_size, 512)
         self.hidden_layer = nn.Linear(512, 512)
-        self.output_layer = nn.Linear(512, 8)
+        self.output_layer = nn.Linear(512, output_size)
 
     def forward(self, input, dropout=False):
         """
