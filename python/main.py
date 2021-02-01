@@ -18,14 +18,15 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 25
+EPOCHS = 0
 UNKNOWN_CLASS = False
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
-BATCH_SIZE = 1
+BATCH_SIZE = 32
 SOFTMAX = True
 MC_DROPOUT = False
-FORWARD_PASSES = 100
+COST_MATRIX = True
+FORWARD_PASSES = 2
 BBB = False
 image_size = 224
 test_indexs = []
@@ -33,6 +34,7 @@ test_size = 0
 val_size = 0
 train_size = 0
 best_val = 0
+best_loss = 0
 
 if ENABLE_GPU:
     device = torch.device("cuda:0")
@@ -46,7 +48,6 @@ composed_train = transforms.Compose([
                                 transforms.ColorJitter(brightness=0.2),
                                 transforms.RandomVerticalFlip(),
                                 transforms.RandomHorizontalFlip(),
-                                # Skew the image by 1% of its total size
                                 transforms.RandomAffine(0, shear=0.01),
                                 transforms.ToTensor(),
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
@@ -128,7 +129,7 @@ def get_data_sets(plot=False):
 
     return training_set, valid_set, testing_set, len(test_idx), len(train_idx), len(valid_idx), test_idx
 
-train_set, val_set, test_set, test_size, train_size, val_size, test_indexs = get_data_sets(plot=True)
+train_set, val_set, test_set, test_size, train_size, val_size, test_indexs = get_data_sets(plot=False)
 
 #helper.count_classes(train_set, BATCH_SIZE)
 #helper.count_classes(val_set, BATCH_SIZE)
@@ -162,10 +163,13 @@ for weight in weights:
 #new_weights = helper.apply_cost_matrix()
 
 class_weights = torch.Tensor(new_weights).to(device)
-loss_function = nn.CrossEntropyLoss(weight=class_weights)
+if COST_MATRIX:
+    loss_function = nn.CrossEntropyLoss(weight=class_weights, reduction='none')
+else:
+    loss_function = nn.CrossEntropyLoss(weight=class_weights)
 
 
-def train(cost_matrix, current_epoch, val_losses, train_losses, val_accuracy, train_accuracy, verbose=False):
+def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy, verbose=False):
     """
     trains the network while also recording the accuracy of the network on the training data
     :param verboose: If true dumps out debug info about which classes the network is predicting when correct and incorrect
@@ -179,6 +183,11 @@ def train(cost_matrix, current_epoch, val_losses, train_losses, val_accuracy, tr
         best_val = 0
     else:
         best_val = max(val_accuracy)
+
+    if not val_losses:
+        best_loss = 1000000
+    else:
+        best_loss = min(val_losses)
 
     for i in range(0, len(val_losses)):
         intervals.append(i)
@@ -207,13 +216,26 @@ def train(cost_matrix, current_epoch, val_losses, train_losses, val_accuracy, tr
 
             optim.zero_grad()
             outputs = network(image_batch, dropout=True)
-            loss = loss_function(outputs, label_batch)
 
-            if cost_matrix:
 
-                for output in outputs:
-                    cost = helper.get_cost(torch.argmax(output), label_batch[0])
-                    loss = loss * cost
+            if COST_MATRIX:
+                loss_values = loss_function(outputs, label_batch)
+                temp_loss = torch.tensor(0.0)
+                weighting = torch.tensor(0.0)
+                i = 0
+                for loss_value in loss_values:
+                    cost = helper.get_cost(torch.argmax(outputs[i]), label_batch[i])
+                    if new_weights:
+                        weighting = weighting + new_weights[label_batch[i]]
+                    else:
+                        weighting = torch.tensor(1.0)
+                    loss_value = loss_value * cost
+                    temp_loss = temp_loss + loss_value
+                    i = i + 1
+
+                loss = temp_loss/(weighting)
+            else:
+                loss = loss_function(outputs, label_batch)
 
             loss.backward()
             optim.step()
@@ -277,6 +299,10 @@ def train(cost_matrix, current_epoch, val_losses, train_losses, val_accuracy, tr
             save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, "best_model/")
             best_val = max(val_accuracy)
 
+        if best_loss > min(val_losses):
+            save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, "best_loss/")
+            best_loss = min(val_losses)
+
     data_plot.plot_loss(intervals, val_losses, train_losses)
     data_plot.plot_validation(intervals, val_accuracy, train_accuracy)
     save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, "saved_model/")
@@ -317,7 +343,22 @@ def test(testing_set, verbose=False):
             image_batch, label_batch = image_batch.to(device), label_batch.to(device)
             with torch.no_grad():
                 outputs = network(image_batch, dropout=False)
-                loss = loss_function(outputs, label_batch)
+
+                if COST_MATRIX:
+                    loss_values = loss_function(outputs, label_batch)
+                    temp_loss = torch.tensor(0.0)
+                    weighting = torch.tensor(0.0)
+                    i = 0
+                    for loss_value in loss_values:
+                        cost = helper.get_cost(torch.argmax(outputs[i]), label_batch[i])
+                        weighting = weighting + new_weights[label_batch[i]]
+                        loss_value = loss_value * cost
+                        temp_loss = temp_loss + loss_value
+                        i = i + 1
+
+                    loss = temp_loss / (weighting)
+                else:
+                    loss = loss_function(outputs, label_batch)
 
             losses.append(loss.item())
 
@@ -384,13 +425,13 @@ def load_net(root_dir, output_size):
     return network, optim, len(train_losses), val_losses, train_losses, val_accuracies, train_accuracies
 
 
-def train_net(root_dir, cost_matrix=True, starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[], train_accuracies=[]):
+def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[], train_accuracies=[]):
     """
     Trains a network, saving the parameters and the losses/accuracies over time
     :return:
     """
     starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(
-        cost_matrix, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies, verbose=True)
+        starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies, verbose=True)
 
     if not DEBUG:
 
@@ -445,15 +486,29 @@ def print_metrics(model_name):
     data_plot.average_uncertainty_by_class(correct_mc, incorrect_mc, model_name, "MC Dropout Accuracies by Class")
     data_plot.average_uncertainty_by_class(correct_sr, incorrect_sr, model_name, "Softmax Response Accuracies by Class")
 
+    #data_plot.plot_each_mc_pass(model_name + "logbase2/", predictions_softmax, test_indexs, test_data, model_name,
+    #                            "Accuracies by forward pass")
+
     data_plot.plot_risk_coverage(predictions_mc, predictions_softmax, model_name, "Risk Coverage", test_data,
-                                 test_indexs)
+                                 test_indexs, load=True)
+
+    confusion_matrix = helper.make_confusion_matrix(predictions_softmax, test_data, test_indexs)
+    data_plot.plot_confusion(confusion_matrix, model_name, "Softmax Response on Test Set")
+    confusion_matrix = helper.confusion_array(confusion_matrix)
+    data_plot.plot_confusion(confusion_matrix, model_name, "Softmax Response Test Set Normalized")
+
+    confusion_matrix = helper.make_confusion_matrix(predictions_mc, test_data, test_indexs)
+    data_plot.plot_confusion(confusion_matrix, model_name, "MC dropout Test Set")
+    confusion_matrix = helper.confusion_array(confusion_matrix)
+    data_plot.plot_confusion(confusion_matrix, model_name, "MC dropout Test Set Normalized")
 
 #model_name = "best_model/"
-#model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
-model_name = "saved_model/"
+#model_name = "best_loss/"
+model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
+#model_name = "saved_model/"
 
 
-train_net(model_name, cost_matrix=True)
+#train_net(model_name)
 #helper.plot_samples(train_data, data_plot)
 
 network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(model_name, 8)
@@ -462,37 +517,26 @@ network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_
 #test(val_set, verbose=True)
 
 """train_net(model_name,
-          cost_matrix=True,
           starting_epoch=starting_epoch,
           val_losses=val_losses,
           train_losses=train_losses,
           val_accuracies=val_accuracies,
           train_accuracies=train_accuracies)
-"""
 
-"""
+predictions_mc_entropy, predictions_mc_var = testing.predict(test_set, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
+helper.write_rows(predictions_mc_entropy, model_name + "mc_entropy_predictions.csv")
+helper.write_rows(predictions_mc_var, model_name + "mc_variance_predictions.csv")
+
 predictions_softmax = testing.predict(test_set, network, test_size, softmax=True)
-helper.write_rows(predictions_softmax, model_name + "softmax_predictions.csv")
+helper.write_rows(predictions_softmax, model_name + "softmax_predictions.csv")"""
 
-predictions_mc = testing.predict(test_set, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
-helper.write_rows(predictions_mc, model_name + "mc_predictions.csv")"""
+
 
 predictions_softmax = helper.read_rows(model_name + "softmax_predictions.csv")
 predictions_mc = helper.read_rows(model_name + "mc_predictions.csv")
 
 predictions_softmax = helper.string_to_float(predictions_softmax)
 predictions_mc = helper.string_to_float(predictions_mc)
-
-confusion_matrix = helper.make_confusion_matrix(predictions_softmax, test_data, test_indexs)
-data_plot.plot_confusion(confusion_matrix, model_name, "Test Set without Cost")
-confusion_matrix = helper.confusion_array(confusion_matrix)
-data_plot.plot_confusion(confusion_matrix, model_name, "Test Set without Cost")
-
-
-confusion_matrix = helper.make_confusion_matrix(predictions_softmax, test_data, test_indexs)
-data_plot.plot_confusion(confusion_matrix, model_name, "Test Set with Cost")
-confusion_matrix = helper.confusion_array(confusion_matrix)
-data_plot.plot_confusion(confusion_matrix, model_name, "Test Set with Cost")
 
 print_metrics(model_name)
 

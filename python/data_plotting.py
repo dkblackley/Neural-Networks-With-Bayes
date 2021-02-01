@@ -11,6 +11,7 @@ from tqdm import tqdm
 import seaborn as sn
 import pandas as pd
 from copy import deepcopy
+from sklearn import metrics
 
 # LABELS = {'MEL': 0, 'NV': 1, 'BCC': 2, 'AK': 3, 'BKL': 4, 'DF': 5, 'VASC': 6, 'SCC': 7}
 
@@ -137,7 +138,7 @@ class DataPlotting:
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
-    def plot_risk_coverage(self, predictions_mc_original, predictions_softmax_original, root_dir, title, test_data, test_indexs):
+    def plot_risk_coverage(self, predictions_mc_original, predictions_softmax_original, root_dir, title, test_data, test_indexs, load=False):
         """
         Plots a risk coverage curve, showing risk in % on the y-axis showing the risk that the predicitions might be
         wrong and coverage % on the x-axis that plots the % of the dataset that has been included to get that risk
@@ -154,45 +155,52 @@ class DataPlotting:
         entropies_mc = []
         entropies_sm = []
 
+        if load:
+            mc_accuracies = helper.read_csv(root_dir + "MC_risk_coverage.csv")
+            sm_accuracies = helper.read_csv(root_dir + "SM_risk_coverage.csv")
 
-        for i in range(0, len(predictions_softmax)):
-            entropies_sm.append(predictions_softmax[i].pop())
-            entropies_mc.append(predictions_mc[i].pop())
+            coverage = [i/len(test_indexs) for i in range(0, len(test_indexs))]
+            coverage.append(1.0)
 
-        predictions_mc = deepcopy(predictions_mc_original)
-        predictions_softmax = deepcopy(predictions_softmax_original)
+        else:
+            for i in range(0, len(predictions_softmax)):
+                entropies_sm.append(predictions_softmax[i][-1])
+                entropies_mc.append(predictions_mc[i][-1])
 
-        entropies_mc.sort()
-        entropies_sm.sort()
+            entropies_mc.sort()
+            entropies_sm.sort()
 
-        sm_accuracies.append(0)
-        mc_accuracies.append(0)
+            sm_accuracies.append(0)
+            mc_accuracies.append(0)
 
-        coverage.append(0.0)
+            coverage.append(0.0)
 
-        for i in tqdm(range(0, len(test_indexs))):
-            correct_mc, incorrect_mc, uncertain_mc = helper.get_correct_incorrect(predictions_mc, test_data,
-                                                                                  test_indexs, threshold=entropies_mc.pop())
+            for i in tqdm(range(0, len(test_indexs))):
+                correct_mc, incorrect_mc, uncertain_mc = helper.get_correct_incorrect(predictions_mc, test_data,
+                                                                                      test_indexs, threshold=entropies_mc.pop())
 
-            correct_sr, incorrect_sr, uncertain_mc = helper.get_correct_incorrect(predictions_softmax, test_data,
-                                                                                  test_indexs, threshold=entropies_sm.pop())
+                correct_sr, incorrect_sr, uncertain_mc = helper.get_correct_incorrect(predictions_softmax, test_data,
+                                                                                      test_indexs, threshold=entropies_sm.pop())
 
-            if incorrect_sr and correct_sr:
-                sm_accuracies.append((len(incorrect_sr) / len(test_indexs)) * 100)
-            else:
-                sm_accuracies.append(0)
+                if incorrect_sr and correct_sr:
+                    sm_accuracies.append((len(incorrect_sr) / len(test_indexs)) * 100)
+                else:
+                    sm_accuracies.append(0)
 
-            if correct_mc and incorrect_mc:
-                mc_accuracies.append((len(incorrect_mc) / len(test_indexs)) * 100)
-            else:
-                mc_accuracies.append(0)
+                if correct_mc and incorrect_mc:
+                    mc_accuracies.append((len(incorrect_mc) / len(test_indexs)) * 100)
+                else:
+                    mc_accuracies.append(0)
 
-            coverage.append((i/len(test_indexs)))
+                coverage.append((i/len(test_indexs)))
 
 
 
         helper.write_csv(mc_accuracies, root_dir + "MC_risk_coverage.csv")
         helper.write_csv(sm_accuracies, root_dir + "SM_risk_coverage.csv")
+
+        dropout_AUC = round(metrics.auc(coverage, mc_accuracies), 3)
+        softmax_AUC = round(metrics.auc(coverage, sm_accuracies), 3)
 
 
         plt.plot(coverage, mc_accuracies, label="MC Dropout")
@@ -203,6 +211,12 @@ class DataPlotting:
         plt.xlabel("Coverage")
         plt.ylabel("Innaccuracy (%)")
         plt.legend(loc='best')
+        txt_string = '\n'.join((
+            f'Softmax Response AUC: {softmax_AUC}',
+            f'MC Dropout AUC: {dropout_AUC}'
+        ))
+        props = dict(boxstyle='round', fc='white', alpha=0.5)
+        plt.text(0.6, 5, txt_string, bbox=props, fontsize=10)
 
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
@@ -211,16 +225,15 @@ class DataPlotting:
 
         correct_preds = []
         incorrect_preds = []
-        correct = deepcopy(correct)
-        incorrect = deepcopy(incorrect)
+
         i = 0
 
         for pred in correct:
-            correct_preds.append(pred.pop())
+            correct_preds.append(pred[-1])
             i = i + 1
 
         for pred in incorrect:
-            incorrect_preds.append(pred.pop())
+            incorrect_preds.append(pred[-1])
             i = i + 1
 
         plt.hist(correct_preds, alpha=0.5, label="Correct")
@@ -270,13 +283,67 @@ class DataPlotting:
         labels = list(labels_accuracy.keys())
 
         fig, ax = plt.subplots()
-        ax.scatter(entropies, accuracies)
+        ax.scatter(entropies, accuracies,
+                   color=['Black', 'Blue', 'Brown', 'Crimson', 'DarkGreen', 'DarkMagenta', 'Gray', 'Peru'], s=20)
 
         for i, txt in enumerate(labels):
-            ax.annotate(txt, (entropies[i], accuracies[i]))
+            ax.annotate(txt, (entropies[i], accuracies[i]), xytext=(entropies[i], accuracies[i] + 1))
 
         plt.xlabel("Average Entropy")
         plt.ylabel("Accuracy")
+        plt.ylim([min(accuracies) - 5, max(accuracies) + 5])
         plt.title(title)
         plt.savefig(f"{root_dir + title}.png")
+        plt.show()
+
+    def plot_each_mc_pass(self, mc_dir, predictions_softmax, test_indexes, test_data, save_dir, title):
+
+        mc_accuracies = []
+        sm_accuracies = []
+
+        pos_avg_entropies_mc = []
+        neg_avg_entropies_mc = []
+        pos_avg_entropies_sm = []
+        neg_avg_entropies_sm = []
+
+        for i in tqdm(range(0, 100)):
+            current_mc_predictions = helper.read_rows(mc_dir + f"mc_forward_pass_{i}_predictions.csv")
+            current_mc_predictions = helper.string_to_float(current_mc_predictions)
+
+            entropies_sm = []
+            entropies_mc = []
+
+            for c in range(0, len(current_mc_predictions)):
+                entropies_mc.append(current_mc_predictions[c][-1])
+                entropies_sm.append(predictions_softmax[c][-1])
+
+            correct_mc, incorrect_mc, uncertain_mc = helper.get_correct_incorrect(current_mc_predictions, test_data,
+                                                                                      test_indexes)
+
+            correct_sr, incorrect_sr, uncertain_mc = helper.get_correct_incorrect(predictions_softmax, test_data,
+                                                                                      test_indexes)
+
+            sm_accuracies.append((len(correct_sr) / len(test_indexes)) * 100)
+            mc_accuracies.append((len(correct_mc) / len(test_indexes)) * 100)
+
+            pos_avg_entropies_mc.append((sum(entropies_mc)/len(entropies_mc)) + (len(correct_mc) / len(test_indexes)) * 100)
+            pos_avg_entropies_sm.append((sum(entropies_sm)/len(entropies_sm)) + (len(correct_sr) / len(test_indexes)) * 100)
+
+            neg_avg_entropies_sm.append((sum(entropies_sm) / len(entropies_sm) * -1) + (len(correct_sr) / len(test_indexes)) * 100)
+            neg_avg_entropies_mc.append((sum(entropies_mc)/len(entropies_mc) * -1) + (len(correct_mc) / len(test_indexes)) * 100)
+
+
+        passes = [i for i in range(0, 100)]
+
+        plt.plot(passes, mc_accuracies, color='#1B2ACC', label="MC Dropout")
+        plt.fill_between(passes, pos_avg_entropies_mc, neg_avg_entropies_mc, alpha=0.5, edgecolor='#1B2ACC')
+
+        plt.plot(passes, sm_accuracies, '--', color='#CC4F1B', label="Softmax response")
+        plt.fill_between(passes, pos_avg_entropies_sm, neg_avg_entropies_sm, alpha=0.5, edgecolor='#CC4F1B')
+
+        plt.legend(loc='lower right')
+        plt.xlabel("Forward Passes")
+        plt.ylabel("Accuracy")
+        plt.title(title)
+        plt.savefig(f"{save_dir + title}.png")
         plt.show()

@@ -191,44 +191,65 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes):
 
         drop_predictions = np.vstack((drop_predictions, predictions[np.newaxis, :, :]))
 
-        if (i + 1) % 1 == 0 or i == 0:
-            mean = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
 
-            mean = mean.tolist()
-            entropies = [c[n_classes - 1] for c in mean]
+        mean_entropy = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
+        mean_variance = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
+        temp = np.delete(drop_predictions, n_classes - 1, 2)
+        variance = np.var(temp, axis=0)  # shape (n_samples, n_classes)
 
-            for c in range(0, len(entropies)):
-                entropies[c] = (entropies[c] - min(entropies)) / (max(entropies) - min(entropies))
+        variance = variance.tolist()
+        mean_entropy = mean_entropy.tolist()
+        mean_variance = mean_variance.tolist()
+        entropies = [c[n_classes - 1] for c in mean_entropy]
 
-            for c in range(0, len(mean)):
-                mean[c][n_classes - 1] = entropies[c]
+        for c in range(0, len(entropies)):
+            entropies[c] = (entropies[c] - min(entropies)) / (max(entropies) - min(entropies))
 
-            for preds in mean:
+        for c in range(0, len(mean_entropy)):
+            mean_entropy[c][n_classes - 1] = entropies[c]
+            mean_variance[c][n_classes - 1] = sum(variance[c])
 
-                for c in range(0, len(preds)):
-                    preds[c] = '{:.17f}'.format(preds[c])
+        for preds in mean_entropy:
 
-            helper.write_rows(mean, f"best_model/mc_forward_pass_{i}_predictions.csv")
+            for c in range(0, len(preds)):
+                preds[c] = '{:.17f}'.format(preds[c])
 
-    mean = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
+        for preds in mean_variance:
 
-    mean = mean.tolist()
-    entropies = [c[n_classes - 1] for c in mean]
+            for c in range(0, len(preds)):
+                preds[c] = '{:.17f}'.format(preds[c])
+
+        helper.write_rows(mean_entropy, f"best_model/mc_forward_pass_{i}_predictions.csv")
+        helper.write_rows(mean_variance, f"best_model/mc_forward_pass_{i}_variance.csv")
+
+    mean_entropy = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
+    mean_variance = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
+    temp = np.delete(drop_predictions, n_classes - 1, 2)
+    variance = np.var(temp, axis=0)  # shape (n_samples, n_classes)
+
+    variance = variance.tolist()
+    mean_entropy = mean_entropy.tolist()
+    mean_variance = mean_variance.tolist()
+    entropies = [c[n_classes - 1] for c in mean_entropy]
 
     for c in range(0, len(entropies)):
         entropies[c] = (entropies[c] - min(entropies)) / (max(entropies) - min(entropies))
 
-    for c in range(0, len(mean)):
-        mean[c][n_classes - 1] = entropies[c]
-    i = 0
-    for preds in mean:
+    for c in range(0, len(mean_entropy)):
+        mean_entropy[c][n_classes - 1] = entropies[c]
+        mean_variance[c][n_classes - 1] = sum(variance[c])
+
+    for preds in mean_entropy:
 
         for c in range(0, len(preds)):
             preds[c] = '{:.17f}'.format(preds[c])
 
-        i = i + 1
+    for preds in mean_variance:
 
-    return mean
+        for c in range(0, len(preds)):
+            preds[c] = '{:.17f}'.format(preds[c])
+
+    return mean_entropy, mean_variance
 
 
 def predict(test_set, network, num_samples, n_classes=8, mc_dropout=False, forward_passes=100, softmax=False):
@@ -238,11 +259,9 @@ def predict(test_set, network, num_samples, n_classes=8, mc_dropout=False, forwa
     # Make sure network is in eval mode
     network.eval()
 
-    predictions = []
-
     if mc_dropout:
-        predictions = monte_carlo(test_set, forward_passes, network, num_samples, n_classes)
+        predictions_e, predictions_v = monte_carlo(test_set, forward_passes, network, num_samples, n_classes)
+        return predictions_e, predictions_v
     elif softmax:
         predictions = softmax_pred(test_set, network, n_classes)
-
-    return predictions
+        return predictions
