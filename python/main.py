@@ -18,15 +18,15 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 0
+EPOCHS = 20
 UNKNOWN_CLASS = False
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
 MC_DROPOUT = False
-COST_MATRIX = True
-FORWARD_PASSES = 2
+COST_MATRIX = False
+FORWARD_PASSES = 100
 BBB = False
 image_size = 224
 test_indexs = []
@@ -177,6 +177,8 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
     training set losses per epoch, a list of the validation accuracy per epoch and the
     training accuracy per epoch
     """
+
+    input("\nHave you remembered to move the model out of saved model before loading in the best model?")
 
     intervals = []
     if not val_accuracy:
@@ -368,7 +370,8 @@ def test(testing_set, verbose=False):
 
                 answer = torch.argmax(output)
                 real_answer = label_batch[index]
-                confusion_matrix[real_answer.item()][answer.item()] += 1
+                confusion_matrix[answer.item()][real_answer.item()] += 1
+                #confusion_matrix[real_answer.item()][answer.item()] += 1
 
                 index += 1
 
@@ -490,7 +493,7 @@ def print_metrics(model_name):
     #                            "Accuracies by forward pass")
 
     data_plot.plot_risk_coverage(predictions_mc, predictions_softmax, model_name, "Risk Coverage", test_data,
-                                 test_indexs, load=True)
+                                 test_indexs)
 
     confusion_matrix = helper.make_confusion_matrix(predictions_softmax, test_data, test_indexs)
     data_plot.plot_confusion(confusion_matrix, model_name, "Softmax Response on Test Set")
@@ -504,11 +507,13 @@ def print_metrics(model_name):
 
 #model_name = "best_model/"
 #model_name = "best_loss/"
-model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
-#model_name = "saved_model/"
+#model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
+model_name = "saved_model/"
 
 
-#train_net(model_name)
+#data_plot.plot_confusion(helper.get_cost_matrix(), model_name, "My cost matrix")
+
+train_net(model_name)
 #helper.plot_samples(train_data, data_plot)
 
 network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(model_name, 8)
@@ -528,16 +533,15 @@ helper.write_rows(predictions_mc_entropy, model_name + "mc_entropy_predictions.c
 helper.write_rows(predictions_mc_var, model_name + "mc_variance_predictions.csv")
 
 predictions_softmax = testing.predict(test_set, network, test_size, softmax=True)
-helper.write_rows(predictions_softmax, model_name + "softmax_predictions.csv")"""
-
-
+helper.write_rows(predictions_softmax, model_name + "softmax_predictions.csv")
 
 predictions_softmax = helper.read_rows(model_name + "softmax_predictions.csv")
-predictions_mc = helper.read_rows(model_name + "mc_predictions.csv")
+#predictions_mc = helper.read_rows(model_name + "mc_variance_predictions.csv")
+predictions_mc = helper.read_rows(model_name + "mc_entropy_predictions.csv")
 
 predictions_softmax = helper.string_to_float(predictions_softmax)
 predictions_mc = helper.string_to_float(predictions_mc)
 
-print_metrics(model_name)
+print_metrics(model_name)"""
 
 
