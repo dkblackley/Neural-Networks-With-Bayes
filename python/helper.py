@@ -152,6 +152,14 @@ def write_rows(list_to_write, filename):
         writer = csv.writer(f)
         writer.writerows(list_to_write)
 
+def attach_last_row(array1, array2):
+
+    for i in range(0, len(array2)):
+        temp = array2[i][-1]
+        array1[i].append(array2[i][-1])
+
+    return array1
+
 def read_rows(filname):
 
     with open(filname, 'r', newline='') as f:
@@ -362,34 +370,116 @@ def get_cost(answer, real_answer, num_classes=8):
     return cost
 
 
-def find_lowest_cost(probabilities, num_classes=8):
-    cost_matrix = np.array([[0, 150, 10, 10, 150, 150, 10, 0],
-                   [10, 0, 10, 10, 0, 0, 10, 10],
-                   [10, 30, 0, 0, 30, 30, 0, 10],
-                   [10, 20, 0, 0, 20, 20, 0, 10],
-                   [10, 0, 10, 10, 0, 0, 10, 10],
-                   [10, 0, 10, 10, 0, 0, 10, 10],
-                   [10, 20, 0, 0, 20, 20, 0, 10],
-                   [0, 150, 10, 10, 150, 150, 10, 0]])
+def find_lowest_cost(probabilities, num_classes=8, uncertain=False):
+
+    if uncertain:
+        cost_matrix = np.array([
+                    [0, 150, 10, 10, 150, 150, 10, 1, 10],
+                    [10, 0, 10, 10, 1, 1, 10, 10, 10],
+                    [10, 30, 0, 1, 30, 30, 1, 10, 10],
+                    [10, 20, 1, 0, 20, 20, 1, 10, 10],
+                    [10, 1, 10, 10, 0, 1, 10, 10, 10],
+                    [10, 1, 10, 10, 1, 0, 10, 10, 10],
+                    [10, 20, 1, 1, 20, 20, 0, 10, 10],
+                    [1, 150, 10, 10, 150, 150, 10, 0, 10],
+                    [10, 10, 10, 10, 10, 10, 10, 10, 0]])
+    else:
+        cost_matrix = np.array([
+                   [0, 150, 10, 10, 150, 150, 10, 1],
+                   [10, 0, 10, 10, 1, 1, 10, 10],
+                   [10, 30, 0, 1, 30, 30, 1, 10],
+                   [10, 20, 1, 0, 20, 20, 1, 10],
+                   [10, 1, 10, 10, 0, 1, 10, 10],
+                   [10, 1, 10, 10, 1, 0, 10, 10],
+                   [10, 20, 1, 1, 20, 20, 0, 10],
+                   [1, 150, 10, 10, 150, 150, 10, 0]])
+
+    """cost_matrix = np.array([
+                   [0, 150, 10, 10],
+                   [10, 0, 10, 10],
+                   [10, 30, 0, 1],
+                   [10, 20, 1, 0]])"""
 
     lowest_cost = -1
     answer = 0
 
-    for i in range(len(probabilities)):
+    for j in range(len(probabilities)):
         total = 0
-        for column in cost_matrix.T:
-            total += probabilities[i] * column[i]
 
-        if lowest_cost > total:
-            answer = i
+        for k in range(0, len(probabilities)):
+            temp = cost_matrix[k][j]
+            total += probabilities[k] * cost_matrix[k][j]
+
+        if lowest_cost > total or lowest_cost == -1:
+            answer = j
             lowest_cost = total
+
+    #if np.argmax(probabilities) == 6:
+    #    print('oi')
 
     return answer, lowest_cost
 
 
+def test_lowest_cost(probabilities, num_classes=8):
+    cost_matrix = np.array([[0, 2],
+                            [1, 0]])
+
+    lowest_cost = -1
+    answer = 0
+
+    for j in range(len(probabilities)):
+        total = 0
+
+        for k in range(0, len(probabilities)):
+            total += probabilities[k] * cost_matrix[k][j]
+
+        if lowest_cost > total or lowest_cost == -1:
+            answer = j
+            lowest_cost = total
+
+    return answer, lowest_cost
+
+def get_each_cost(probabilities, uncertain=False):
+
+    costs = []
+
+    if uncertain:
+        cost_matrix = np.array([
+            [0, 150, 10, 10, 150, 150, 10, 1, 10],
+            [10, 0, 10, 10, 1, 1, 10, 10, 10],
+            [10, 30, 0, 1, 30, 30, 1, 10, 10],
+            [10, 20, 1, 0, 20, 20, 1, 10, 10],
+            [10, 1, 10, 10, 0, 1, 10, 10, 10],
+            [10, 1, 10, 10, 1, 0, 10, 10, 10],
+            [10, 20, 1, 1, 20, 20, 0, 10, 10],
+            [1, 150, 10, 10, 150, 150, 10, 0, 10],
+            [10, 10, 10, 10, 10, 10, 10, 10, 0]])
+    else:
+        cost_matrix = np.array([
+            [0, 150, 10, 10, 150, 150, 10, 1],
+            [10, 0, 10, 10, 1, 1, 10, 10],
+            [10, 30, 0, 1, 30, 30, 1, 10],
+            [10, 20, 1, 0, 20, 20, 1, 10],
+            [10, 1, 10, 10, 0, 1, 10, 10],
+            [10, 1, 10, 10, 1, 0, 10, 10],
+            [10, 20, 1, 1, 20, 20, 0, 10],
+            [1, 150, 10, 10, 150, 150, 10, 0]])
+
+    for j in range(0, len(probabilities)):
+        total = 0
+
+        for k in range(0, len(probabilities)):
+            temp = cost_matrix[k][j]
+            total += probabilities[k] * cost_matrix[k][j]
+
+        costs.append(total)
 
 
-def get_correct_incorrect(predictions, data_loader, test_indexs, threshold=-1.0):
+    return costs
+
+
+
+def get_correct_incorrect(predictions, data_loader, test_indexes, cost_matrix, threshold=-1.0):
 
     predictions = deepcopy(predictions)
 
@@ -398,36 +488,52 @@ def get_correct_incorrect(predictions, data_loader, test_indexs, threshold=-1.0)
     uncertain = []
     wrong = right = total = 0
 
-    for index in test_indexs:
+    for index in test_indexes:
 
         uncertainty = predictions[total].pop()
-        answer = np.argmax(predictions[total])
+        if cost_matrix:
+            answer = find_lowest_cost(predictions[total])[0]
+        else:
+            answer = np.argmax(predictions[total])
         real_answer = data_loader.get_label(index)
 
 
         if uncertainty <= threshold:
-            uncertain.append([answer, uncertainty])
+            uncertain.append([answer, real_answer, uncertainty])
         elif answer == real_answer:
-            correct.append([answer, uncertainty])
+            correct.append([answer, real_answer, uncertainty])
             right += 1
         else:
-            incorrect.append([answer, uncertainty])
+            incorrect.append([answer, real_answer, uncertainty])
             wrong += 1
         total += 1
 
     return correct, incorrect, uncertain
 
+def is_prediction_corect(prediction, index, data_loader):
+
+    real_answer = data_loader.get_label(index)
+
+    if prediction == real_answer:
+        return True
+    else:
+        return False
+
+
 def confusion_array(arrays, dimension=0):
 
     np_array = np.array(arrays)
 
-    new_arrays = np_array / np_array.sum(axis=dimension, keepdims=1)
+    summed_array = np_array.sum(axis=dimension, keepdims=1)
+
+    new_arrays = np.divide(np_array, summed_array, out=np.zeros(np_array.shape, dtype=float),
+                                                  where=summed_array!=0)
     new_arrays = np.round(new_arrays, 3)
 
     return new_arrays.tolist()
 
 
-def make_confusion_matrix(predictions, data_loader, test_indexes, threshold=-1.0):
+def make_confusion_matrix(predictions, data_loader, test_indexes, cost_matrix, threshold=-1.0):
     predictions = deepcopy(predictions)
 
     confusion_matrix = []
@@ -440,7 +546,10 @@ def make_confusion_matrix(predictions, data_loader, test_indexes, threshold=-1.0
     for index in test_indexes:
 
         predictions[total].pop()
-        answer = np.argmax(predictions[total])
+        if cost_matrix:
+            answer = find_lowest_cost(predictions[total])[0]
+        else:
+            answer = np.argmax(predictions[total])
         real_answer = data_loader.get_label(index)
 
         confusion_matrix[real_answer][answer] += 1
