@@ -481,6 +481,11 @@ def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_ac
 
 def print_metrics(model_name):
 
+
+    data_plot.count_sampels_in_intervals(predictions_mc, model_name, "Number of Samples in each Interval MC Dropout", 5)
+    data_plot.count_sampels_in_intervals(predictions_mc, model_name, "Number of Samples in each Interval MC Dropout (Without probabilites below 0.2)", 5, skip_first=True)
+    data_plot.count_sampels_in_intervals(predictions_softmax, model_name, "Number of Samples in each Interval Softmax", 5)
+    data_plot.count_sampels_in_intervals(predictions_softmax, model_name, "Number of Samples in each Interval Softmax (Without probabilites below 0.2)", 5, skip_first=True)
     data_plot.plot_each_mc_cost(predictions_softmax, model_name, "Costs by Forward Pass", "entropy")
 
     data_plot.plot_cost_coverage(costs_mc, costs_sr, model_name, "Coverage by Lowest Expected cost", load=False)

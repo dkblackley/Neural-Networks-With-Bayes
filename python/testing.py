@@ -177,6 +177,7 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
     for i in tqdm(range(0, forward_passes)):
 
         predictions = np.empty((0, n_classes))
+        current_costs = np.empty((0, n_classes - 1))
 
 
         for i_batch, sample_batch in enumerate(data_set):
@@ -194,22 +195,17 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
                 else:
                     entropy = -np.sum(answers * np.log(answers), axis=0)  # shape (n_samples, n_classes)
 
-
+                current_costs = np.vstack((current_costs, helper.get_each_cost(answers)))
                 answers = np.append(answers, entropy)
                 predictions = np.vstack((predictions, answers))
 
         drop_predictions = np.vstack((drop_predictions, predictions[np.newaxis, :, :]))
         temp = np.delete(drop_predictions, n_classes - 1, 2) # Remove entropy
 
-        current_costs = np.empty((0, n_classes - 1))
-
-        for j in range(0, n_samples):
-            current_costs = np.vstack((current_costs,  helper.get_each_cost(temp[-1][j].tolist())))
-
         costs = np.vstack((costs, current_costs[np.newaxis, :, :]))
         costs_mean = np.mean(costs, axis=0)
 
-        mean_entropy = mean_variance = mean_predictions = np.mean(drop_predictions, axis=0)
+        mean_entropy = mean_variance = np.mean(drop_predictions, axis=0)
         variance = np.var(temp, axis=0, ddof=1)  # shape (n_samples, n_classes)
 
         variance = variance.tolist()

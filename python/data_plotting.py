@@ -141,6 +141,63 @@ class DataPlotting:
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
+    def count_sampels_in_intervals(self, predictions, root_dir, title, bins, skip_first=False):
+
+        bin_count = []
+
+        class_probabilites = np.delete(predictions, -1, axis=1)
+
+
+
+        for i in range(0, 8):
+            current_probabilites = class_probabilites[:, i: i + 1]
+            current_count = []
+
+            for c in range(1, bins + 1):
+
+                if skip_first and c == 1:
+                    continue
+
+                total = len(current_probabilites[
+                    (current_probabilites <= c / bins) & (current_probabilites > c / bins - 1 / bins)])
+
+                current_count.append(total)
+
+            bin_count.append(current_count)
+
+
+        figure, axs = plt.subplots(2, 4, figsize=(20, 10))
+        titles = list(self.LABELS.values())
+        figure.suptitle(title)
+        # add a big axis, hide frame
+        figure.add_subplot(111, frameon=False)
+        # hide tick and tick label of the big axis
+        plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
+        plt.xlabel("Probability", fontsize=16)
+        plt.ylabel("Number of Samples", fontsize=16)
+        axs = axs.ravel()
+
+        probabilities_range = []
+
+
+        for i in range(1, bins + 1):
+
+            if skip_first and i == 1:
+                continue
+            probabilities_range.append(f"{round(i / bins - 1/bins, 1)} to {round(i / bins, 1)}")
+
+        for idx, a in enumerate(axs):
+            a.bar(probabilities_range, bin_count[idx], alpha=0.5)
+            a.set_title(titles[idx])
+
+            # a.set_xlabel(xaxes)
+            # a.set_ylabel(yaxes)
+
+        plt.tight_layout()
+        plt.savefig(f"{root_dir + title}.png")
+        plt.show()
+
+
     def plot_calibration(self, predictions, title, root_dir, bins):
 
         average_probs = []
@@ -153,7 +210,7 @@ class DataPlotting:
             current_freq = []
             current_probabilites = class_probabilites[:,i: i+1]
 
-            for c in range(1, 11):
+            for c in range(1, bins + 1):
 
                 average = current_probabilites[
                                            (current_probabilites <= c/bins) & (current_probabilites > c/bins - 1/bins)].mean()
@@ -498,6 +555,7 @@ class DataPlotting:
             axs = axs.ravel()
 
             for idx, a in enumerate(axs):
+
                 a.hist(labels_correct[self.LABELS[idx]], alpha=0.5, label="Correct")
                 a.hist(labels_incorrect[self.LABELS[idx]], alpha=0.5, label="Incorrect")
                 a.set_title(titles[idx])
