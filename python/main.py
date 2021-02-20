@@ -18,7 +18,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 9
+EPOCHS = 20
 UNKNOWN_CLASS = False
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
@@ -481,6 +481,7 @@ def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_ac
 
 def print_metrics(model_name):
 
+    data_plot.plot_cost_coverage(costs_mc, costs_sr, model_name, "Coverage by Lowest Expected cost", load=False)
 
     data_plot.count_sampels_in_intervals(predictions_mc, model_name, "Number of Samples in each Interval MC Dropout", 5)
     data_plot.count_sampels_in_intervals(predictions_mc, model_name, "Number of Samples in each Interval MC Dropout (Without probabilites below 0.2)", 5, skip_first=True)
@@ -488,7 +489,7 @@ def print_metrics(model_name):
     data_plot.count_sampels_in_intervals(predictions_softmax, model_name, "Number of Samples in each Interval Softmax (Without probabilites below 0.2)", 5, skip_first=True)
     data_plot.plot_each_mc_cost(predictions_softmax, model_name, "Costs by Forward Pass", "entropy")
 
-    data_plot.plot_cost_coverage(costs_mc, costs_sr, model_name, "Coverage by Lowest Expected cost", load=False)
+
 
     data_plot.plot_calibration(predictions_mc, "MC Dropout Reliability Diagram", model_name, 5)
     data_plot.plot_calibration(predictions_softmax, "Softmax Reliability Diagram", model_name, 5)
@@ -545,8 +546,8 @@ def print_metrics(model_name):
 
 #model_name = "best_model/"
 #model_name = "best_loss/"
-model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
-#model_name = "saved_model/"
+#model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
+model_name = "saved_model/"
 
 
 #data_plot.plot_confusion(helper.get_cost_matrix(), model_name, "My cost matrix")
@@ -559,12 +560,14 @@ network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_
 
 #test(val_set, verbose=True)
 
-"""train_net(model_name,
+train_net(model_name,
           starting_epoch=starting_epoch,
           val_losses=val_losses,
           train_losses=train_losses,
           val_accuracies=val_accuracies,
-          train_accuracies=train_accuracies)"""
+          train_accuracies=train_accuracies)
+
+model_name = "best_loss/"
 
 predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, model_name, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
 helper.write_rows(predictions_mc_entropy, model_name + "mc_entropy_predictions.csv")
@@ -574,6 +577,7 @@ helper.write_rows(costs_mc, model_name + "mc_costs.csv")
 predictions_softmax, costs_softmax = testing.predict(test_set, model_name, network, test_size, softmax=True)
 helper.write_rows(predictions_softmax, model_name + "softmax_predictions.csv")
 helper.write_rows(costs_softmax, model_name + "softmax_costs.csv")
+
 
 predictions_softmax = helper.read_rows(model_name + "softmax_predictions.csv")
 predictions_mc = helper.read_rows(model_name + "mc_entropy_predictions.csv")

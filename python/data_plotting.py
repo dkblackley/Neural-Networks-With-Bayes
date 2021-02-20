@@ -426,7 +426,7 @@ class DataPlotting:
         plt.ylim([0, maxi])
         plt.title(title)
         plt.xlabel("Coverage")
-        plt.ylabel("Average Lowest Expected Cost")
+        plt.ylabel("Average LEC")
         plt.legend(loc='best')
         txt_string = '\n'.join((
             f'SR AUC: {softmax_AUC}',
