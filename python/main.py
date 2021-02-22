@@ -18,7 +18,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 20
+EPOCHS = 0
 UNKNOWN_CLASS = False
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
@@ -481,6 +481,10 @@ def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_ac
 
 def print_metrics(model_name):
 
+    data_plot.plot_true_cost_coverage(predictions_mc, predictions_softmax, model_name,
+                                      "Average True cost using Probabilities", costs=False)
+    data_plot.plot_true_cost_coverage(costs_mc, costs_sr, model_name, "Average True cost using LEC")
+
     data_plot.plot_cost_coverage(costs_mc, costs_sr, model_name, "Coverage by Lowest Expected cost", load=False)
 
     data_plot.count_sampels_in_intervals(predictions_mc, model_name, "Number of Samples in each Interval MC Dropout", 5)
@@ -545,9 +549,9 @@ def print_metrics(model_name):
 #helper.find_lowest_cost([0.02939715244487161, 0.02633606596558821, 0.00489231509944943, 0.8639416721463203])
 
 #model_name = "best_model/"
-#model_name = "best_loss/"
+model_name = "best_loss/"
 #model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
-model_name = "saved_model/"
+#model_name = "saved_model/"
 
 
 #data_plot.plot_confusion(helper.get_cost_matrix(), model_name, "My cost matrix")
@@ -560,14 +564,13 @@ network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_
 
 #test(val_set, verbose=True)
 
-train_net(model_name,
+"""train_net(model_name,
           starting_epoch=starting_epoch,
           val_losses=val_losses,
           train_losses=train_losses,
           val_accuracies=val_accuracies,
-          train_accuracies=train_accuracies)
+          train_accuracies=train_accuracies)"""
 
-model_name = "best_loss/"
 
 predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, model_name, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
 helper.write_rows(predictions_mc_entropy, model_name + "mc_entropy_predictions.csv")

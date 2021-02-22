@@ -238,9 +238,9 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
         if i == 3:
             temp2 = np.array(mean_variance)
 
-        #helper.write_rows(mean_entropy, root_dir + f"naturallog/mc_forward_pass_{i}_entropy.csv")
-        #helper.write_rows(mean_variance, root_dir + f"variance/mc_forward_pass_{i}_variance.csv")
-        #helper.write_rows(costs_mean, root_dir + f"costs/mc_forward_pass_{i}_costs.csv")
+        helper.write_rows(mean_entropy, root_dir + f"naturallog/mc_forward_pass_{i}_entropy.csv")
+        helper.write_rows(mean_variance, root_dir + f"variance/mc_forward_pass_{i}_variance.csv")
+        helper.write_rows(costs_mean, root_dir + f"costs/mc_forward_pass_{i}_costs.csv")
 
 
 

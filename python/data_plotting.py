@@ -264,8 +264,6 @@ class DataPlotting:
         plt.show()
 
 
-
-
     def plot_risk_coverage(self, predictions_mc_original, predictions_softmax_original, root_dir, title, load=False, cost_matrx=False):
         """
         Plots a risk coverage curve, showing risk in % on the y-axis showing the risk that the predicitions might be
@@ -439,93 +437,124 @@ class DataPlotting:
         plt.show()
 
 
-    def plot_cost_coverage2(self, costs_mc_original, costs_softmax_original, root_dir, title, uncertainty=False, n_classes=8, load=False, cost_matrx=False):
-        """
-        Plots a risk coverage curve, showing risk in % on the y-axis showing the risk that the predicitions might be
-        wrong and coverage % on the x-axis that plots the % of the dataset that has been included to get that risk
-        :param array: list of accuracies, should be a list containing all predicitions on each class and also the
-        entropy value as the last item in the array.
-        :param title: Title of the plot
-        :return:
-        """
+    def plot_true_cost_coverage(self, preds_mc_original, preds_softmax_original, root_dir, title, uncertainty=False, costs=True, n_classes=8):
 
-        costs_mc = np.array(costs_mc_original)
-        costs_sr = np.array(costs_softmax_original)
-        mc_average_costs = []
-        sr_average_costs = []
-        coverage = []
         entropies_mc = []
         entropies_sr = []
-        if uncertainty:
-            ind = np.argsort(costs_mc[:,-1])
-            costs_mc_sorted = costs_mc[ind]
 
-            ind = np.argsort(costs_sr[:, -1])
-            costs_sr_sorted = costs_sr[ind]
+        if not costs:
 
-            costs_sr_sorted = costs_sr_sorted[:,-1]
-            costs_mc_sorted = costs_mc_sorted[:,-1]
+            preds_sr_copy = deepcopy(preds_softmax_original)
+            preds_mc_copy = deepcopy(preds_mc_original)
+
+            for i in range(0, len(preds_sr_copy)):
+                entropies_sr.append(preds_sr_copy[i].pop())
+                entropies_mc.append(preds_mc_copy[i].pop())
+
+            preds_mc = np.array(preds_mc_copy)
+            preds_sr = np.array(preds_sr_copy)
+
         else:
-            costs_mc_sorted = np.zeros((len(self.test_indexes), n_classes))
-            costs_sr_sorted = np.zeros((len(self.test_indexes), n_classes))
 
-            for i in range(0, len(self.test_indexes)):
-                lowest = np.unravel_index(costs_sr.argmin(), costs_sr.shape)[0]
-                costs_sr_sorted[i] = costs_sr[lowest]
-                costs_sr = np.delete(costs_sr, lowest, axis=0)
+            preds_mc = np.array(preds_mc_original)
+            preds_sr = np.array(preds_softmax_original)
+        #index_copy = deepcopy(self.test_indexes)
 
-                lowest = np.unravel_index(costs_mc.argmin(), costs_mc.shape)[0]
-                costs_mc_sorted[i] = costs_mc[lowest]
-                costs_mc = np.delete(costs_mc, lowest, axis=0)
+        values_mc = []
+        values_sr = []
+
+        mc_average = []
+        sr_average = []
+        coverage = []
+
+        new_preds_mc = []
+        new_preds_sr = []
+
+        for i in range(0, len(self.test_indexes)):
+
+            true_label = self.data_loader.get_label(self.test_indexes[i])
+
+            if costs:
+                values_mc.append(helper.find_true_cost(np.argmin(preds_mc[i]), true_label))
+                values_sr.append(helper.find_true_cost(np.argmin(preds_sr[i]), true_label))
+
+                new_preds_mc.append(np.min(preds_mc[i]))
+                new_preds_sr.append(np.min(preds_sr[i]))
+
+            else:
+                values_mc.append(helper.find_true_cost(np.argmax(preds_mc[i]), true_label))
+                values_sr.append(helper.find_true_cost(np.argmax(preds_sr[i]), true_label))
+
+                new_preds_mc.append(np.max(preds_mc[i]))
+                new_preds_sr.append(np.max(preds_sr[i]))
+
+        preds_sr = np.array(new_preds_sr)
+        preds_mc = np.array(new_preds_mc)
+
+        coverage.append(0.0)
+
+        mc_average.append(sum(values_mc)/len(values_mc))
+        sr_average.append(sum(values_sr)/len(values_sr))
 
 
+        for i in range(0, len(self.test_indexes)):
 
-        for i in tqdm(range(0, len(self.test_indexes))):
-            total_mc_cost = 0
-            total_sr_cost = 0
-            total = 0
-            for c in range(0, np.shape(costs_mc_sorted)[0]):
-                total_mc_cost += costs_mc_sorted[c].min()
-                total_sr_cost += costs_sr_sorted[c].min()
-                total += 1
+            if costs:
+                max_row = np.unravel_index(preds_mc.argmax(), preds_mc.shape)[0]
+                preds_mc = np.delete(preds_mc, max_row, axis=0)
+                del values_mc[max_row]
 
-            mc_average_costs.append(total_mc_cost/total)
-            sr_average_costs.append(total_sr_cost/total)
+                max_row = np.unravel_index(preds_sr.argmax(), preds_sr.shape)[0]
+                preds_sr = np.delete(preds_sr, max_row, axis=0)
+                del values_sr[max_row]
+            else:
+                min_row = np.unravel_index(preds_mc.argmin(), preds_mc.shape)[0]
+                preds_mc = np.delete(preds_mc, min_row, axis=0)
+                del values_mc[min_row]
 
-            # Remove highest cost and go again
-            costs_mc_sorted = np.delete(costs_mc_sorted, np.shape(costs_mc_sorted)[0] - 1, axis=0)
-            costs_sr_sorted = np.delete(costs_sr_sorted, np.shape(costs_sr_sorted)[0] - 1, axis=0)
+                min_row = np.unravel_index(preds_sr.argmin(), preds_sr.shape)[0]
+                preds_sr = np.delete(preds_sr, min_row, axis=0)
+                del values_sr[min_row]
 
-            coverage.append(1 - i/len(self.test_indexes))
+            coverage.append((i + 1)/len(self.test_indexes))
 
+            if len(values_mc) == 0:
+                mc_average.append(0)
+                sr_average.append(0)
+            else:
+                mc_average.append(sum(values_mc) / len(values_mc))
+                sr_average.append(sum(values_sr) / len(values_sr))
 
-
-        mc_average_costs.reverse()
-        sr_average_costs.reverse()
 
         coverage.reverse()
 
-        dropout_AUC = round(metrics.auc(coverage, mc_average_costs), 3)
-        softmax_AUC = round(metrics.auc(coverage, sr_average_costs), 3)
+
+        #dropout_AUC = round(metrics.auc(coverage, mc_average), 3)
+        #softmax_AUC = round(metrics.auc(coverage, sr_average), 3)
 
 
-        plt.plot(coverage, mc_average_costs, label="MC Dropout")
-        plt.plot(coverage, sr_average_costs, label="Softmax response")
-        maxi = max([max(mc_average_costs) + 3, max(mc_average_costs) + 3])
+        plt.plot(coverage, mc_average, label="MC Dropout")
+        plt.plot(coverage, sr_average, label="Softmax response")
+        maxi = max([max(mc_average) + 2, max(mc_average) + 2])
         plt.ylim([0, maxi])
         plt.title(title)
         plt.xlabel("Coverage")
-        plt.ylabel("Average Expected Cost")
+        plt.ylabel("Average True Cost")
         plt.legend(loc='best')
-        txt_string = '\n'.join((
-            f'SR AUC: {softmax_AUC}',
-            f'MC Dropout AUC: {dropout_AUC}'
-        ))
-        props = dict(boxstyle='round', fc='white', alpha=0.5)
-        plt.text(5, 0.6, txt_string, bbox=props, fontsize=10)
 
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
+
+    ost_matrix = np.array([
+        [0, 150, 10, 10, 150, 150, 10, 1],
+        [10, 0, 10, 10, 1, 1, 10, 10],
+        [10, 30, 0, 1, 30, 30, 1, 10],
+        [10, 20, 1, 0, 20, 20, 1, 10],
+        [10, 1, 10, 10, 0, 1, 10, 10],
+        [10, 1, 10, 10, 1, 0, 10, 10],
+        [10, 20, 1, 1, 20, 20, 0, 10],
+        [1, 150, 10, 10, 150, 150, 10, 0]])
+
 
     def plot_correct_incorrect_uncertainties(self, correct, incorrect, root_dir, title, by_class=False, prediction_index=1):
 

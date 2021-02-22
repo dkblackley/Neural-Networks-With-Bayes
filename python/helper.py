@@ -420,6 +420,19 @@ def find_lowest_cost(probabilities, num_classes=8, uncertain=False):
     return answer, lowest_cost
 
 
+def find_true_cost(prediction, answer, num_classes=8):
+    cost_matrix = np.array([
+                   [0, 150, 10, 10, 150, 150, 10, 1],
+                   [10, 0, 10, 10, 1, 1, 10, 10],
+                   [10, 30, 0, 1, 30, 30, 1, 10],
+                   [10, 20, 1, 0, 20, 20, 1, 10],
+                   [10, 1, 10, 10, 0, 1, 10, 10],
+                   [10, 1, 10, 10, 1, 0, 10, 10],
+                   [10, 20, 1, 1, 20, 20, 0, 10],
+                   [1, 150, 10, 10, 150, 150, 10, 0]])
+
+    return cost_matrix[answer][prediction]
+
 def test_lowest_cost(probabilities, num_classes=8):
     cost_matrix = np.array([[0, 2],
                             [1, 0]])
@@ -518,7 +531,6 @@ def is_prediction_corect(prediction, index, data_loader):
         return True
     else:
         return False
-
 
 def confusion_array(arrays, dimension=0):
 
