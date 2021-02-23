@@ -197,7 +197,6 @@ class DataPlotting:
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
-
     def plot_calibration(self, predictions, title, root_dir, bins):
 
         average_probs = []
@@ -262,7 +261,6 @@ class DataPlotting:
         plt.tight_layout()
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
-
 
     def plot_risk_coverage(self, predictions_mc_original, predictions_softmax_original, root_dir, title, load=False, cost_matrx=False):
         """
@@ -436,7 +434,6 @@ class DataPlotting:
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
-
     def plot_true_cost_coverage(self, preds_mc_original, preds_softmax_original, root_dir, title, uncertainty=False, costs=True, n_classes=8):
 
         entropies_mc = []
@@ -544,17 +541,6 @@ class DataPlotting:
 
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
-
-    ost_matrix = np.array([
-        [0, 150, 10, 10, 150, 150, 10, 1],
-        [10, 0, 10, 10, 1, 1, 10, 10],
-        [10, 30, 0, 1, 30, 30, 1, 10],
-        [10, 20, 1, 0, 20, 20, 1, 10],
-        [10, 1, 10, 10, 0, 1, 10, 10],
-        [10, 1, 10, 10, 1, 0, 10, 10],
-        [10, 20, 1, 1, 20, 20, 0, 10],
-        [1, 150, 10, 10, 150, 150, 10, 0]])
-
 
     def plot_correct_incorrect_uncertainties(self, correct, incorrect, root_dir, title, by_class=False, prediction_index=1):
 

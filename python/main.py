@@ -548,8 +548,8 @@ def print_metrics(model_name):
 
 #helper.find_lowest_cost([0.02939715244487161, 0.02633606596558821, 0.00489231509944943, 0.8639416721463203])
 
-#model_name = "best_model/"
-model_name = "best_loss/"
+model_name = "best_model/"
+#model_name = "best_loss/"
 #model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
 #model_name = "saved_model/"
 

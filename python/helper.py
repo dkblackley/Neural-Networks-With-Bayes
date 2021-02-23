@@ -433,6 +433,9 @@ def find_true_cost(prediction, answer, num_classes=8):
 
     return cost_matrix[answer][prediction]
 
+def remove_values_below_threshold(list, threshold):
+    pass
+
 def test_lowest_cost(probabilities, num_classes=8):
     cost_matrix = np.array([[0, 2],
                             [1, 0]])
