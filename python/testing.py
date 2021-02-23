@@ -117,8 +117,9 @@ def predict_ISIC(data_set, data_loader, network, device, forward_passes, softmax
 
     return predictions
 
-def softmax_pred(data_set, network, n_classes):
+def softmax_pred(data_set, network, n_classes, n_samples):
 
+    costs = []
     predictions = np.empty((0, n_classes))
     soft_max = nn.Softmax(dim=1)
 
@@ -131,7 +132,7 @@ def softmax_pred(data_set, network, n_classes):
             predictions = np.vstack((predictions, output.cpu().numpy()))
 
     """    epsilon = sys.float_info.min
-    entropies = -np.sum(predictions*np.log2(predictions + epsilon), axis=-1)
+    entropies = -np.sum(predictions*np.log(predictions + epsilon), axis=-1)
 
     predictions = predictions.tolist()
     entropies = entropies.tolist()
@@ -140,6 +141,12 @@ def softmax_pred(data_set, network, n_classes):
         entropies[i] = (entropies[i] - min(entropies)) / (max(entropies) - min(entropies))"""
 
     predictions = predictions.tolist()
+
+    for preds in predictions:
+        current_costs = helper.get_each_cost(preds)
+        for c in range(0, len(current_costs)):
+            current_costs[c] = '{:.17f}'.format(current_costs[c])
+        costs.append(current_costs)
 
     for pred in predictions:
         pred.append(1 - max(pred))
@@ -154,20 +161,23 @@ def softmax_pred(data_set, network, n_classes):
 
         #i = i + 1
 
-    return predictions
+    return predictions, costs
 
 
-def monte_carlo(data_set, forward_passes, network, n_samples, n_classes):
+def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_dir):
+
+    costs = np.empty((0, n_samples, n_classes))
 
     # Add one for the entropy
     n_classes = n_classes + 1
-
     soft_max = nn.Softmax(dim=1)
     drop_predictions = np.empty((0, n_samples, n_classes))
+
 
     for i in tqdm(range(0, forward_passes)):
 
         predictions = np.empty((0, n_classes))
+        current_costs = np.empty((0, n_classes - 1))
 
 
         for i_batch, sample_batch in enumerate(data_set):
@@ -183,23 +193,25 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes):
                 if np.max(answers) > 0.9999:
                     entropy = 0.0
                 else:
-                    entropy = -np.sum(answers * np.log2(answers), axis=0)  # shape (n_samples, n_classes)
+                    entropy = -np.sum(answers * np.log(answers), axis=0)  # shape (n_samples, n_classes)
 
-
+                current_costs = np.vstack((current_costs, helper.get_each_cost(answers)))
                 answers = np.append(answers, entropy)
                 predictions = np.vstack((predictions, answers))
 
         drop_predictions = np.vstack((drop_predictions, predictions[np.newaxis, :, :]))
+        temp = np.delete(drop_predictions, n_classes - 1, 2) # Remove entropy
 
+        costs = np.vstack((costs, current_costs[np.newaxis, :, :]))
+        costs_mean = np.mean(costs, axis=0)
 
-        mean_entropy = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
-        mean_variance = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
-        temp = np.delete(drop_predictions, n_classes - 1, 2)
-        variance = np.var(temp, axis=0)  # shape (n_samples, n_classes)
+        mean_entropy = mean_variance = np.mean(drop_predictions, axis=0)
+        variance = np.var(temp, axis=0, ddof=1)  # shape (n_samples, n_classes)
 
         variance = variance.tolist()
         mean_entropy = mean_entropy.tolist()
         mean_variance = mean_variance.tolist()
+        costs_mean = costs_mean.tolist()
         entropies = [c[n_classes - 1] for c in mean_entropy]
 
         for c in range(0, len(entropies)):
@@ -219,8 +231,19 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes):
             for c in range(0, len(preds)):
                 preds[c] = '{:.17f}'.format(preds[c])
 
-        helper.write_rows(mean_entropy, f"best_model/mc_forward_pass_{i}_predictions.csv")
-        helper.write_rows(mean_variance, f"best_model/mc_forward_pass_{i}_variance.csv")
+        for cost in costs_mean:
+            for c in range(0, len(cost)):
+                cost[c] = '{:.17f}'.format(cost[c])
+
+        if i == 3:
+            temp2 = np.array(mean_variance)
+
+        helper.write_rows(mean_entropy, root_dir + f"naturallog/mc_forward_pass_{i}_entropy.csv")
+        helper.write_rows(mean_variance, root_dir + f"variance/mc_forward_pass_{i}_variance.csv")
+        helper.write_rows(costs_mean, root_dir + f"costs/mc_forward_pass_{i}_costs.csv")
+
+
+
 
     mean_entropy = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
     mean_variance = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
@@ -249,10 +272,10 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes):
         for c in range(0, len(preds)):
             preds[c] = '{:.17f}'.format(preds[c])
 
-    return mean_entropy, mean_variance
+    return mean_entropy, mean_variance, costs
 
 
-def predict(test_set, network, num_samples, n_classes=8, mc_dropout=False, forward_passes=100, softmax=False):
+def predict(test_set, root_dir, network, num_samples, n_classes=8, mc_dropout=False, forward_passes=100, softmax=False):
 
     print("Predicting on Test set")
 
@@ -260,8 +283,8 @@ def predict(test_set, network, num_samples, n_classes=8, mc_dropout=False, forwa
     network.eval()
 
     if mc_dropout:
-        predictions_e, predictions_v = monte_carlo(test_set, forward_passes, network, num_samples, n_classes)
-        return predictions_e, predictions_v
+        predictions_e, predictions_v, costs = monte_carlo(test_set, forward_passes, network, num_samples, n_classes, root_dir)
+        return predictions_e, predictions_v, costs
     elif softmax:
-        predictions = softmax_pred(test_set, network, n_classes)
-        return predictions
+        predictions, costs = softmax_pred(test_set, network, n_classes, num_samples)
+        return predictions, costs
