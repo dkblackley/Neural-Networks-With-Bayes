@@ -419,9 +419,33 @@ def find_lowest_cost(probabilities, num_classes=8, uncertain=False):
 
     return answer, lowest_cost
 
+def get_label_indexes(predictions, test_indexes, data_loader):
+    indexes = {'MEL': [], 'NV': [], 'BCC': [], 'AK': [], 'BKL': [], 'DF': [], 'VASC': [], 'SCC': []}
+    new_predictions = {'MEL': [], 'NV': [], 'BCC': [], 'AK': [], 'BKL': [], 'DF': [], 'VASC': [], 'SCC': []}
 
-def find_true_cost(prediction, answer, num_classes=8):
-    cost_matrix = np.array([
+    for i in range(0, len(test_indexes)):
+
+        label = data_loader.get_label(test_indexes[i])
+        indexes[LABELS[label]].append(test_indexes[i])
+        new_predictions[LABELS[label]].append(predictions[i])
+
+    return new_predictions, indexes
+
+
+def find_true_cost(prediction, answer, num_classes=8, flatten=False):
+
+    if flatten:
+        cost_matrix = np.array([
+            [0, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1],
+            [1, 1, 0, 1, 1, 1, 1, 1],
+            [1, 1, 1, 0, 1, 1, 1, 1],
+            [1, 1, 1, 1, 0, 1, 1, 1],
+            [1, 1, 1, 1, 1, 0, 1, 1],
+            [1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 0]])
+    else:
+        cost_matrix = np.array([
                    [0, 150, 10, 10, 150, 150, 10, 1],
                    [10, 0, 10, 10, 1, 1, 10, 10],
                    [10, 30, 0, 1, 30, 30, 1, 10],

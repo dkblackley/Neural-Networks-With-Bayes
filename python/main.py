@@ -481,9 +481,23 @@ def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_ac
 
 def print_metrics(model_name):
 
+    data_plot.plot_true_cost_coverage_by_class([predictions_mc, predictions_softmax], model_name,
+                                               "Average Test cost by Classes using raw Probabilities with Flattened Matrix",
+                                               costs=False, flatten=True)
+
+    data_plot.plot_true_cost_coverage_by_class([costs_mc, costs_sr], model_name,
+                                      "Average Test cost by Classes using LEC")
+
+    data_plot.plot_true_cost_coverage_by_class([predictions_mc, predictions_softmax], model_name,
+                                               "Average Test cost by Classes using raw Probabilities", costs=False)
+
+
+
     data_plot.plot_true_cost_coverage(predictions_mc, predictions_softmax, model_name,
-                                      "Average True cost using Probabilities", costs=False)
-    data_plot.plot_true_cost_coverage(costs_mc, costs_sr, model_name, "Average True cost using LEC")
+                                      "Average Test cost using Raw Probabilities with Flattened Matrix", costs=False, flatten=True)
+    data_plot.plot_true_cost_coverage(predictions_mc, predictions_softmax, model_name,
+                                      "Average Test cost using Raw Probabilities", costs=False)
+    data_plot.plot_true_cost_coverage(costs_mc, costs_sr, model_name, "Average Test cost using LEC")
 
     data_plot.plot_cost_coverage(costs_mc, costs_sr, model_name, "Coverage by Lowest Expected cost", load=False)
 
@@ -548,9 +562,9 @@ def print_metrics(model_name):
 
 #helper.find_lowest_cost([0.02939715244487161, 0.02633606596558821, 0.00489231509944943, 0.8639416721463203])
 
-model_name = "best_model/"
+#model_name = "best_model/"
 #model_name = "best_loss/"
-#model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
+model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
 #model_name = "saved_model/"
 
 
@@ -572,14 +586,14 @@ network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_
           train_accuracies=train_accuracies)"""
 
 
-predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, model_name, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
+"""predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, model_name, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
 helper.write_rows(predictions_mc_entropy, model_name + "mc_entropy_predictions.csv")
 helper.write_rows(predictions_mc_var, model_name + "mc_variance_predictions.csv")
 helper.write_rows(costs_mc, model_name + "mc_costs.csv")
 
 predictions_softmax, costs_softmax = testing.predict(test_set, model_name, network, test_size, softmax=True)
 helper.write_rows(predictions_softmax, model_name + "softmax_predictions.csv")
-helper.write_rows(costs_softmax, model_name + "softmax_costs.csv")
+helper.write_rows(costs_softmax, model_name + "softmax_costs.csv")"""
 
 
 predictions_softmax = helper.read_rows(model_name + "softmax_predictions.csv")

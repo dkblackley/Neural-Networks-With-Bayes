@@ -92,7 +92,7 @@ def predict_ISIC(data_set, data_loader, network, device, forward_passes, softmax
     :return: a list of lists holding the networks predictions for each class
     """
 
-    print("\nPredicting on ISIC2019 Test set")
+    print("\nPredicting on ISIC 2019 Test set")
 
     if softmax:
         predictions = [['image', 'MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC', 'UNK']]

@@ -434,7 +434,7 @@ class DataPlotting:
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
-    def plot_true_cost_coverage(self, preds_mc_original, preds_softmax_original, root_dir, title, uncertainty=False, costs=True, n_classes=8):
+    def plot_true_cost_coverage(self, preds_mc_original, preds_softmax_original, root_dir, title, uncertainty=False, costs=True, n_classes=8, flatten=False):
 
         entropies_mc = []
         entropies_sr = []
@@ -472,15 +472,15 @@ class DataPlotting:
             true_label = self.data_loader.get_label(self.test_indexes[i])
 
             if costs:
-                values_mc.append(helper.find_true_cost(np.argmin(preds_mc[i]), true_label))
-                values_sr.append(helper.find_true_cost(np.argmin(preds_sr[i]), true_label))
+                values_mc.append(helper.find_true_cost(np.argmin(preds_mc[i]), true_label, flatten=flatten))
+                values_sr.append(helper.find_true_cost(np.argmin(preds_sr[i]), true_label, flatten=flatten))
 
                 new_preds_mc.append(np.min(preds_mc[i]))
                 new_preds_sr.append(np.min(preds_sr[i]))
 
             else:
-                values_mc.append(helper.find_true_cost(np.argmax(preds_mc[i]), true_label))
-                values_sr.append(helper.find_true_cost(np.argmax(preds_sr[i]), true_label))
+                values_mc.append(helper.find_true_cost(np.argmax(preds_mc[i]), true_label, flatten=flatten))
+                values_sr.append(helper.find_true_cost(np.argmax(preds_sr[i]), true_label, flatten=flatten))
 
                 new_preds_mc.append(np.max(preds_mc[i]))
                 new_preds_sr.append(np.max(preds_sr[i]))
@@ -533,12 +533,143 @@ class DataPlotting:
         plt.plot(coverage, mc_average, label="MC Dropout")
         plt.plot(coverage, sr_average, label="Softmax response")
         maxi = max([max(mc_average) + 2, max(mc_average) + 2])
-        plt.ylim([0, maxi])
+        #plt.ylim([0, maxi])
         plt.title(title)
         plt.xlabel("Coverage")
-        plt.ylabel("Average True Cost")
+        plt.ylabel("Average Test Cost")
         plt.legend(loc='best')
 
+        plt.savefig(f"{root_dir + title}.png")
+        plt.show()
+
+    def plot_true_cost_coverage_by_class(self, preds, root_dir, title, uncertainty=False, costs=True, n_classes=8, flatten=False):
+
+        entropies = []
+        preds_copy = []
+
+        """for i in range(0, len(preds)):
+            entropies.append({'MEL': [], 'NV': [], 'BCC': [], 'AK': [], 'BKL': [], 'DF': [], 'VASC': [], 'SCC': []})"""
+
+
+        if not costs:
+
+            for i in range(0, len(preds)):
+
+                preds_copy.append(deepcopy(preds[i]))
+
+                for c in range(0, len(preds[i])):
+                    entropies.append(preds[i][c].pop())
+
+                preds[i] = np.array(preds[i])
+
+
+        else:
+
+            for i in range(0, len(preds)):
+                preds[i] = np.array(preds[i])
+        #index_copy = deepcopy(self.test_indexes)
+
+        results = []
+        results_average = []
+        new_preds = []
+
+
+        for i in range(0, len(preds)):
+            results.append({'MEL': [], 'NV': [], 'BCC': [], 'AK': [], 'BKL': [], 'DF': [], 'VASC': [], 'SCC': []})
+            results_average.append({'MEL': [], 'NV': [], 'BCC': [], 'AK': [], 'BKL': [], 'DF': [], 'VASC': [], 'SCC': []})
+            new_preds.append({'MEL': [], 'NV': [], 'BCC': [], 'AK': [], 'BKL': [], 'DF': [], 'VASC': [], 'SCC': []})
+
+        for i in range(0, len(preds)):
+            preds[i], label_indexes = helper.get_label_indexes(preds[i], self.test_indexes, self.data_loader)
+
+        coverage = {}
+
+        for key in results[0]:
+            coverage[key] = [i/len(label_indexes[key]) for i in range(0, len(label_indexes[key]) + 1)]
+            coverage[key].reverse()
+
+
+        for key in label_indexes.keys():
+
+            indexes = label_indexes[key]
+
+            for i in range(0, len(indexes)):
+
+                true_label = self.data_loader.get_label(indexes[i])
+
+                for c in range(0, len(preds)):
+
+                    if costs:
+                        results[c][key].append(
+                            helper.find_true_cost(np.argmin(preds[c][key][i]), true_label, flatten=flatten))
+                        new_preds[c][key].append(np.min(preds[c][key][i]))
+
+                    else:
+
+                        results[c][key].append(
+                            helper.find_true_cost(np.argmax(preds[c][key][i]), true_label, flatten=flatten))
+                        new_preds[c][key].append(np.max(preds[c][key][i]))
+
+        for i in range(0, len(preds)):
+
+            for key in new_preds[i]:
+                preds[i][key] = np.array(new_preds[i][key])
+
+            for key in results_average[i].keys():
+                results_average[i][key].append(sum(results[i][key])/len(results[i][key]))
+
+
+        for key in label_indexes.keys():
+
+            indexes = label_indexes[key]
+
+            for i in range(0, len(indexes)):
+
+                for c in range(0, len(preds)):
+
+                    if costs:
+                        max_row = np.unravel_index(preds[c][key].argmax(), preds[c][key].shape)[0]
+                        preds[c][key] = np.delete(preds[c][key], max_row, axis=0)
+                        del results[c][key][max_row]
+                    else:
+                        min_row = np.unravel_index(preds[c][key].argmin(), preds[c][key].shape)[0]
+                        preds[c][key] = np.delete(preds[c][key], min_row, axis=0)
+                        del results[c][key][min_row]
+
+                    if len(preds[c][key]) == 0:
+                        results_average[c][key].append(0)
+                    else:
+                        results_average[c][key].append(sum(results[c][key]) / len(results[c][key]))
+
+
+
+
+        #dropout_AUC = round(metrics.auc(coverage, mc_average), 3)
+        #softmax_AUC = round(metrics.auc(coverage, sr_average), 3)
+
+        figure, axs = plt.subplots(2, 4, figsize=(20, 10))
+        titles = list(results[0].keys())
+        figure.suptitle(title)
+        # add a big axis, hide frame
+        figure.add_subplot(111, frameon=False)
+        # hide tick and tick label of the big axis
+        plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
+        plt.xlabel("Coverage", fontsize=16)
+        plt.ylabel("Average Test Cost", fontsize=16)
+        axs = axs.ravel()
+
+        for idx, a in enumerate(axs):
+
+            a.plot(coverage[self.LABELS[idx]], results_average[0][self.LABELS[idx]], label="MC Dropout")
+            a.plot(coverage[self.LABELS[idx]], results_average[1][self.LABELS[idx]], label="Softmax Response")
+            a.set_title(titles[idx])
+
+            if idx == 3:
+                a.legend(loc='best')
+            # a.set_xlabel(xaxes)
+            # a.set_ylabel(yaxes)
+
+        plt.tight_layout()
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
