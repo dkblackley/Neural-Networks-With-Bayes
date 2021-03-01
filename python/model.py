@@ -44,13 +44,19 @@ class Classifier(nn.Module):
         output = self.pool(output)
         output = output.view(output.shape[0], -1)
 
-        if dropout:
+        if self.training:
             output = TF.dropout(output, self.drop_rate)
             output = self.efficient_net_output(output)
             output = TF.dropout(output, self.drop_rate)
             output = self.hidden_layer(output)
+
+        elif dropout:
+
+            output = self.efficient_net_output(output)
+            output = self.hidden_layer(output)
             output = TF.dropout(output, self.drop_rate)
         else:
+
             output = self.efficient_net_output(output)
             output = self.hidden_layer(output)
 

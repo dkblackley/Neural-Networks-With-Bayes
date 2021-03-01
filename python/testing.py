@@ -142,14 +142,15 @@ def softmax_pred(data_set, network, n_classes, n_samples):
 
     predictions = predictions.tolist()
 
+    for pred in predictions:
+        pred.append(1 - max(pred))
+
     for preds in predictions:
-        current_costs = helper.get_each_cost(preds)
+        current_costs = helper.get_each_cost(preds, uncertain=True)
         for c in range(0, len(current_costs)):
             current_costs[c] = '{:.17f}'.format(current_costs[c])
         costs.append(current_costs)
 
-    for pred in predictions:
-        pred.append(1 - max(pred))
 
     #i = 0
     for preds in predictions:
@@ -166,18 +167,19 @@ def softmax_pred(data_set, network, n_classes, n_samples):
 
 def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_dir):
 
-    costs = np.empty((0, n_samples, n_classes))
-
+    #costs = np.empty((0, n_samples, n_classes))
     # Add one for the entropy
     n_classes = n_classes + 1
     soft_max = nn.Softmax(dim=1)
     drop_predictions = np.empty((0, n_samples, n_classes))
+    costs = np.empty((0, n_samples, n_classes))
 
 
     for i in tqdm(range(0, forward_passes)):
 
         predictions = np.empty((0, n_classes))
-        current_costs = np.empty((0, n_classes - 1))
+        #current_costs = np.empty((0, n_classes - 1))
+        current_costs = np.empty((0, n_classes))
 
 
         for i_batch, sample_batch in enumerate(data_set):
@@ -195,8 +197,9 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
                 else:
                     entropy = -np.sum(answers * np.log(answers), axis=0)  # shape (n_samples, n_classes)
 
-                current_costs = np.vstack((current_costs, helper.get_each_cost(answers)))
+                #current_costs = np.vstack((current_costs, helper.get_each_cost(answers)))
                 answers = np.append(answers, entropy)
+                current_costs = np.vstack((current_costs, helper.get_each_cost(answers, uncertain=True)))
                 predictions = np.vstack((predictions, answers))
 
         drop_predictions = np.vstack((drop_predictions, predictions[np.newaxis, :, :]))

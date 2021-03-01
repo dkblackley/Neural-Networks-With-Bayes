@@ -434,93 +434,69 @@ class DataPlotting:
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
-    def plot_true_cost_coverage(self, preds_mc_original, preds_softmax_original, root_dir, title, uncertainty=False, costs=True, n_classes=8, flatten=False):
+    def plot_true_cost_coverage(self, preds, root_dir, title, uncertainty=False, costs=True, n_classes=8, flatten=False):
 
-        entropies_mc = []
-        entropies_sr = []
+        values = []
+        averages = []
+        new_preds = []
 
-        if not costs:
+        for pred in preds:
+            pred = np.array(pred)
+            values.append([])
+            averages.append([])
+            new_preds.append([])
 
-            preds_sr_copy = deepcopy(preds_softmax_original)
-            preds_mc_copy = deepcopy(preds_mc_original)
-
-            for i in range(0, len(preds_sr_copy)):
-                entropies_sr.append(preds_sr_copy[i].pop())
-                entropies_mc.append(preds_mc_copy[i].pop())
-
-            preds_mc = np.array(preds_mc_copy)
-            preds_sr = np.array(preds_sr_copy)
-
-        else:
-
-            preds_mc = np.array(preds_mc_original)
-            preds_sr = np.array(preds_softmax_original)
         #index_copy = deepcopy(self.test_indexes)
 
-        values_mc = []
-        values_sr = []
-
-        mc_average = []
-        sr_average = []
         coverage = []
-
-        new_preds_mc = []
-        new_preds_sr = []
 
         for i in range(0, len(self.test_indexes)):
 
             true_label = self.data_loader.get_label(self.test_indexes[i])
 
             if costs:
-                values_mc.append(helper.find_true_cost(np.argmin(preds_mc[i]), true_label, flatten=flatten))
-                values_sr.append(helper.find_true_cost(np.argmin(preds_sr[i]), true_label, flatten=flatten))
 
-                new_preds_mc.append(np.min(preds_mc[i]))
-                new_preds_sr.append(np.min(preds_sr[i]))
+                for c in range(0, len(preds)):
+
+                    values[c].append(helper.find_true_cost(np.argmin(preds[c][i]), true_label, flatten=flatten, uncertain=uncertainty))
+                    new_preds[c].append(np.min(preds[c][i]))
 
             else:
-                values_mc.append(helper.find_true_cost(np.argmax(preds_mc[i]), true_label, flatten=flatten))
-                values_sr.append(helper.find_true_cost(np.argmax(preds_sr[i]), true_label, flatten=flatten))
 
-                new_preds_mc.append(np.max(preds_mc[i]))
-                new_preds_sr.append(np.max(preds_sr[i]))
+                for c in range(0, len(preds)):
 
-        preds_sr = np.array(new_preds_sr)
-        preds_mc = np.array(new_preds_mc)
+                    values[c].append(helper.find_true_cost(np.argmax(preds[c][i]), true_label, flatten=flatten, uncertain=uncertainty))
+                    new_preds[c].append(np.max(preds[c][i]))
+
+        for i in range(0, len(preds)):
+            preds[i] = np.array(new_preds[i])
+            averages[i].append(sum(values[i]) / len(values[i]))
 
         coverage.append(0.0)
-
-        mc_average.append(sum(values_mc)/len(values_mc))
-        sr_average.append(sum(values_sr)/len(values_sr))
-
 
         for i in range(0, len(self.test_indexes)):
 
             if costs:
-                max_row = np.unravel_index(preds_mc.argmax(), preds_mc.shape)[0]
-                preds_mc = np.delete(preds_mc, max_row, axis=0)
-                del values_mc[max_row]
 
-                max_row = np.unravel_index(preds_sr.argmax(), preds_sr.shape)[0]
-                preds_sr = np.delete(preds_sr, max_row, axis=0)
-                del values_sr[max_row]
+                for c in range(0, len(preds)):
+                    max_row = np.unravel_index(preds[c].argmax(), preds[c].shape)[0]
+                    preds[c] = np.delete(preds[c], max_row, axis=0)
+                    del values[c][max_row]
             else:
-                min_row = np.unravel_index(preds_mc.argmin(), preds_mc.shape)[0]
-                preds_mc = np.delete(preds_mc, min_row, axis=0)
-                del values_mc[min_row]
 
-                min_row = np.unravel_index(preds_sr.argmin(), preds_sr.shape)[0]
-                preds_sr = np.delete(preds_sr, min_row, axis=0)
-                del values_sr[min_row]
+                for c in range(0, len(preds)):
+                    min_row = np.unravel_index(preds[c].argmin(), preds[c].shape)[0]
+                    preds[c] = np.delete(preds[c], min_row, axis=0)
+                    del values[c][min_row]
 
             coverage.append((i + 1)/len(self.test_indexes))
 
-            if len(values_mc) == 0:
-                mc_average.append(0)
-                sr_average.append(0)
-            else:
-                mc_average.append(sum(values_mc) / len(values_mc))
-                sr_average.append(sum(values_sr) / len(values_sr))
+            for c in range(0, len(preds)):
+
+                if len(values[c]) == 0:
+                    averages[c].append(0)
+                else:
+                    averages[c].append(sum(values[c]) / len(values[c]))
 
 
         coverage.reverse()
@@ -530,9 +506,9 @@ class DataPlotting:
         #softmax_AUC = round(metrics.auc(coverage, sr_average), 3)
 
 
-        plt.plot(coverage, mc_average, label="MC Dropout")
-        plt.plot(coverage, sr_average, label="Softmax response")
-        maxi = max([max(mc_average) + 2, max(mc_average) + 2])
+        plt.plot(coverage, averages[0], label="MC Dropout")
+        plt.plot(coverage, averages[1], label="Softmax response")
+        #maxi = max([max(mc_average) + 2, max(mc_average) + 2])
         #plt.ylim([0, maxi])
         plt.title(title)
         plt.xlabel("Coverage")
@@ -546,6 +522,11 @@ class DataPlotting:
 
         entropies = []
         preds_copy = []
+
+        if uncertainty:
+            labels = {'MEL': [], 'NV': [], 'BCC': [], 'AK': [], 'BKL': [], 'DF': [], 'VASC': [], 'SCC': []}
+        else:
+            labels = {'MEL': [], 'NV': [], 'BCC': [], 'AK': [], 'BKL': [], 'DF': [], 'VASC': [], 'SCC': [], 'UNK': []}
 
         """for i in range(0, len(preds)):
             entropies.append({'MEL': [], 'NV': [], 'BCC': [], 'AK': [], 'BKL': [], 'DF': [], 'VASC': [], 'SCC': []})"""
@@ -601,13 +582,13 @@ class DataPlotting:
 
                     if costs:
                         results[c][key].append(
-                            helper.find_true_cost(np.argmin(preds[c][key][i]), true_label, flatten=flatten))
+                            helper.find_true_cost(np.argmin(preds[c][key][i]), true_label, flatten=flatten, uncertain=uncertainty))
                         new_preds[c][key].append(np.min(preds[c][key][i]))
 
                     else:
 
                         results[c][key].append(
-                            helper.find_true_cost(np.argmax(preds[c][key][i]), true_label, flatten=flatten))
+                            helper.find_true_cost(np.argmax(preds[c][key][i]), true_label, flatten=flatten, uncertain=uncertainty))
                         new_preds[c][key].append(np.max(preds[c][key][i]))
 
         for i in range(0, len(preds)):
@@ -792,7 +773,7 @@ class DataPlotting:
         neg_avg_entropies_sm = []
 
         for i in tqdm(range(0, 100)):
-            current_mc_predictions = helper.read_rows(mc_dir + uncertainty + '/' + f"mc_forward_pass_{i}_" + uncertainty + ".csv")
+            current_mc_predictions = helper.read_rows(mc_dir + uncertainty + '/' + f"mc_forward_pass_{i}_" + "entropy" + ".csv")
             current_mc_predictions = helper.string_to_float(current_mc_predictions)
 
             entropies_sm = []

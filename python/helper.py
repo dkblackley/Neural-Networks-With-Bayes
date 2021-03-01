@@ -432,10 +432,10 @@ def get_label_indexes(predictions, test_indexes, data_loader):
     return new_predictions, indexes
 
 
-def find_true_cost(prediction, answer, num_classes=8, flatten=False):
+def find_true_cost(prediction, answer, num_classes=8, uncertain=False, flatten=False):
 
     if flatten:
-        cost_matrix = np.array([
+        cost_matrix = [
             [0, 1, 1, 1, 1, 1, 1, 1],
             [1, 0, 1, 1, 1, 1, 1, 1],
             [1, 1, 0, 1, 1, 1, 1, 1],
@@ -443,9 +443,9 @@ def find_true_cost(prediction, answer, num_classes=8, flatten=False):
             [1, 1, 1, 1, 0, 1, 1, 1],
             [1, 1, 1, 1, 1, 0, 1, 1],
             [1, 1, 1, 1, 1, 1, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 0]])
+            [1, 1, 1, 1, 1, 1, 1, 0]]
     else:
-        cost_matrix = np.array([
+        cost_matrix = [
                    [0, 150, 10, 10, 150, 150, 10, 1],
                    [10, 0, 10, 10, 1, 1, 10, 10],
                    [10, 30, 0, 1, 30, 30, 1, 10],
@@ -453,12 +453,29 @@ def find_true_cost(prediction, answer, num_classes=8, flatten=False):
                    [10, 1, 10, 10, 0, 1, 10, 10],
                    [10, 1, 10, 10, 1, 0, 10, 10],
                    [10, 20, 1, 1, 20, 20, 0, 10],
-                   [1, 150, 10, 10, 150, 150, 10, 0]])
+                   [1, 150, 10, 10, 150, 150, 10, 0]]
+
+    if prediction == 9:
+        print("HERE")
+
+    if uncertain:
+        if not flatten:
+            for row in cost_matrix:
+                row.append(10)
+            cost_matrix.append([10, 10, 10, 10, 10, 10, 10, 10, 0])
+        else:
+            for row in cost_matrix:
+                row.append(1)
+            cost_matrix.append([1, 1, 1, 1, 1, 1, 1, 1, 0])
 
     return cost_matrix[answer][prediction]
 
 def remove_values_below_threshold(list, threshold):
     pass
+
+def remove_last_row(arrays):
+    for array in arrays:
+        array.pop()
 
 def test_lowest_cost(probabilities, num_classes=8):
     cost_matrix = np.array([[0, 2],

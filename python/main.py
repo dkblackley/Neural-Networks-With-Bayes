@@ -481,12 +481,24 @@ def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_ac
 
 def print_metrics(model_name):
 
+
+    data_plot.plot_true_cost_coverage_by_class([costs_mc, costs_sr], model_name,
+                                               "Average Test cost by Classes using LEC with Reject option", uncertainty=True)
+    data_plot.plot_true_cost_coverage([costs_mc, costs_sr], model_name, "Coverage by Average Test cost with Reject option", uncertainty=True)
+
+    helper.remove_last_row(costs_sr)
+    helper.remove_last_row(costs_mc)
+
+    data_plot.plot_true_cost_coverage_by_class([costs_mc, costs_sr], model_name,
+                                               "Average Test cost by Classes using LEC", uncertainty=False)
+    data_plot.plot_true_cost_coverage([costs_mc, costs_sr], model_name, "Coverage by Average Test cost", uncertainty=False)
+
     data_plot.plot_true_cost_coverage_by_class([predictions_mc, predictions_softmax], model_name,
                                                "Average Test cost by Classes using raw Probabilities with Flattened Matrix",
                                                costs=False, flatten=True)
 
     data_plot.plot_true_cost_coverage_by_class([costs_mc, costs_sr], model_name,
-                                      "Average Test cost by Classes using LEC")
+                                      "Average Test cost by Classes using LEC", uncertainty=True)
 
     data_plot.plot_true_cost_coverage_by_class([predictions_mc, predictions_softmax], model_name,
                                                "Average Test cost by Classes using raw Probabilities", costs=False)
@@ -494,12 +506,12 @@ def print_metrics(model_name):
 
 
     data_plot.plot_true_cost_coverage(predictions_mc, predictions_softmax, model_name,
-                                      "Average Test cost using Raw Probabilities with Flattened Matrix", costs=False, flatten=True)
+                                      "Average Test cost using Raw Probabilities with Flattened Matrix", costs=False, flatten=True, uncertainty=True)
     data_plot.plot_true_cost_coverage(predictions_mc, predictions_softmax, model_name,
                                       "Average Test cost using Raw Probabilities", costs=False)
     data_plot.plot_true_cost_coverage(costs_mc, costs_sr, model_name, "Average Test cost using LEC")
 
-    data_plot.plot_cost_coverage(costs_mc, costs_sr, model_name, "Coverage by Lowest Expected cost", load=False)
+    data_plot.plot_cost_coverage([costs_mc, costs_sr], model_name, "Coverage by Lowest Expected cost", load=False)
 
     data_plot.count_sampels_in_intervals(predictions_mc, model_name, "Number of Samples in each Interval MC Dropout", 5)
     data_plot.count_sampels_in_intervals(predictions_mc, model_name, "Number of Samples in each Interval MC Dropout (Without probabilites below 0.2)", 5, skip_first=True)
@@ -514,7 +526,7 @@ def print_metrics(model_name):
 
     costs_with_entropy_mc = helper.attach_last_row(costs_mc, predictions_mc)
     costs_with_entropy_sr = helper.attach_last_row(costs_sr, predictions_softmax)
-    data_plot.plot_cost_coverage(costs_with_entropy_mc, costs_with_entropy_sr, model_name, "Risk Coverage by Uncertainty", uncertainty=True)
+    data_plot.plot_cost_coverage(costs_with_entropy_mc, costs_with_entropy_sr, model_name, "Risk Coverage by Uncertainty", uncertainty=False)
 
 
 
@@ -534,7 +546,8 @@ def print_metrics(model_name):
     data_plot.average_uncertainty_by_class(correct_mc, incorrect_mc, model_name, "MC Dropout Accuracies by Prediction")
     data_plot.average_uncertainty_by_class(correct_sr, incorrect_sr, model_name, "Softmax Response Accuracies by Prediction")
 
-
+    data_plot.plot_each_mc_pass(model_name, predictions_softmax, test_indexes, test_data, model_name,
+                                "Accuracy by Forward Pass", 'naturallog')
 
     data_plot.plot_risk_coverage(predictions_mc, predictions_softmax, model_name, "Risk Coverage", load=False)
 
