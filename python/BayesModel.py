@@ -2,12 +2,13 @@
 import math
 import torch
 import torch.nn as nn
+from torch.nn import functional as TF
 
 # Credit to https://www.nitarshan.com/bayes-by-backprop/, Used to create code and follow through the steps of BBB paper
-class GaussianDistribution(object):
+class GaussianDistribution():
 
     def __init__(self, mu, rho):
-        super.__init__()
+
         self.mu = mu
         self.rho = rho
         self.normal = torch.distributions.Normal(0, 1)
@@ -21,14 +22,14 @@ class GaussianDistribution(object):
 
         return self.mu + self.sigma * e
 
-    def log_probability(self, input):
-        return  (-math.log(math.sqrt(2 * math.pi))
-                 - torch.log(self.sigma)
-                 - ((input - self.mu ** 2) / (2 * self.sigma ** 2)).sum())
+    def log_prob(self, input):
+        return (-math.log(math.sqrt(2 * math.pi))
+                - torch.log(self.sigma)
+                - ((input - self.mu) ** 2) / (2 * self.sigma ** 2)).sum()
 
-class ScaleMixtureGaussian(object):
+class ScaleMixtureGaussian():
     def __init__(self, pi, sigma1, sigma2):
-        super().__init__()
+
         self.pi = pi
         self.sigma1 = sigma1
         self.sigma2 = sigma2
@@ -41,6 +42,7 @@ class ScaleMixtureGaussian(object):
         return (torch.log(self.pi * prob1 + (1 - self.pi) * prob2)).sum()
 
 class BayesianLayer(nn.Module):
+
     def __init__(self, in_features, out_features):
         super().__init__()
         self.in_features = in_features
@@ -57,10 +59,12 @@ class BayesianLayer(nn.Module):
         self.bias = GaussianDistribution(self.bias_mu, self.bias_rho)
 
         # Prior distributions
-        SIGMA_1 = 0.8
-        SIGMA_2 = 0.5
-        self.weight_prior = ScaleMixtureGaussian(math.pi, SIGMA_1, SIGMA_2)
-        self.bias_prior = ScaleMixtureGaussian(math.pi, SIGMA_1, SIGMA_2)
+        SIGMA_1 = torch.FloatTensor([math.exp(-0)])
+        SIGMA_2 = torch.FloatTensor([math.exp(-6)])
+        PI = 0.5
+
+        self.weight_prior = ScaleMixtureGaussian(PI, SIGMA_1, SIGMA_2)
+        self.bias_prior = ScaleMixtureGaussian(PI, SIGMA_1, SIGMA_2)
         self.log_prior = 0
         self.log_variational_posterior = 0
 
@@ -73,8 +77,9 @@ class BayesianLayer(nn.Module):
             bias = self.bias.mu
         if self.training or calc_log_probs:
             self.log_prior = self.weight_prior.log_prob(weight) + self.bias_prior.log_prob(bias)
-            self.log_variational_posterior = self.weight.log_probability(weight) + self.bias.log_probability(bias)
+            self.log_variational_posterior = self.weight.log_prob(weight) + self.bias.log_prob(bias)
         else:
             self.log_prior, self.log_variational_posterior = 0, 0
 
-        return F.linear(input, weight, bias)
+        return TF.linear(input, weight, bias)
+

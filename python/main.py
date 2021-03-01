@@ -18,7 +18,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 0
+EPOCHS = 27
 UNKNOWN_CLASS = False
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
@@ -28,7 +28,7 @@ MC_DROPOUT = False
 COST_MATRIX = False
 TEST_COST_MATRIX = False
 FORWARD_PASSES = 100
-BBB = False
+BBB = True
 image_size = 224
 test_indexes = []
 test_size = 0
@@ -140,11 +140,11 @@ data_plot = data_plotting.DataPlotting(UNKNOWN_CLASS, test_data, test_indexes)
 #helper.count_classes(test_set, BATCH_SIZE)
 
 if UNKNOWN_CLASS:
-    network = model.Classifier(image_size, 7, dropout=0.5)
+    network = model.Classifier(image_size, 7, dropout=0.5, BBB=BBB)
     network.to(device)
     weights = [3188, 8985, 2319, 602, 1862, 164, 170]
 else:
-    network = model.Classifier(image_size, 8, dropout=0.5)
+    network = model.Classifier(image_size, 8, dropout=0.5, BBB=BBB)
     network.to(device)
     weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
 
@@ -221,10 +221,16 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
             image_batch, label_batch = image_batch.to(device), label_batch.to(device)
 
             optim.zero_grad()
-            outputs = network(image_batch, dropout=True)
 
+            if BBB:
+                outputs = network(image_batch)
+                loss, outputs = network.sample_elbo(outputs, label_batch, outputs.size()[0], 8, len(train_set), class_weights)
 
-            if COST_MATRIX:
+            else:
+                outputs = network(image_batch, dropout=True)
+                loss = loss_function(outputs, label_batch)
+
+            """if COST_MATRIX:
                 loss_values = loss_function(outputs, label_batch)
                 temp_loss = torch.tensor(0.0)
                 weighting = torch.tensor(0.0)
@@ -240,8 +246,7 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
                     i = i + 1
 
                 loss = temp_loss/(weighting)
-            else:
-                loss = loss_function(outputs, label_batch)
+                else:"""
 
             loss.backward()
             optim.step()
@@ -348,9 +353,17 @@ def test(testing_set, verbose=False):
 
             image_batch, label_batch = image_batch.to(device), label_batch.to(device)
             with torch.no_grad():
-                outputs = network(image_batch, dropout=False)
 
-                if COST_MATRIX:
+                if BBB:
+                    outputs_bayes, outputs = network(image_batch)
+                    loss, outputs = network.sample_elbo(outputs_bayes, label_batch, outputs.size()[0], 8, len(train_set), class_weights)
+
+                else:
+                    outputs = network(image_batch, dropout=True)
+                    loss = loss_function(outputs, label_batch)
+
+
+                """if COST_MATRIX:
                     loss_values = loss_function(outputs, label_batch)
                     temp_loss = torch.tensor(0.0)
                     weighting = torch.tensor(0.0)
@@ -364,7 +377,7 @@ def test(testing_set, verbose=False):
 
                     loss = temp_loss / (weighting)
                 else:
-                    loss = loss_function(outputs, label_batch)
+                    loss = loss_function(outputs, label_batch)"""
 
             losses.append(loss.item())
 
@@ -399,7 +412,10 @@ def test(testing_set, verbose=False):
 
         print("\n Correct Predictions: ")
         for label, count in correct_count.items():
-            print(f"{label}: {count / correct * 100}%")
+            if correct == 0:
+                print(f"{label}: {0}%")
+            else:
+                print(f"{label}: {count / correct * 100}%")
 
         print("\n Incorrect Predictions: ")
         for label, count in incorrect_count.items():
@@ -548,10 +564,10 @@ def print_metrics(model_name):
 
 #helper.find_lowest_cost([0.02939715244487161, 0.02633606596558821, 0.00489231509944943, 0.8639416721463203])
 
-model_name = "best_model/"
+#model_name = "best_model/"
 #model_name = "best_loss/"
 #model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
-#model_name = "saved_model/"
+model_name = "saved_model/"
 
 
 #data_plot.plot_confusion(helper.get_cost_matrix(), model_name, "My cost matrix")
@@ -564,12 +580,12 @@ network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_
 
 #test(val_set, verbose=True)
 
-"""train_net(model_name,
+train_net(model_name,
           starting_epoch=starting_epoch,
           val_losses=val_losses,
           train_losses=train_losses,
           val_accuracies=val_accuracies,
-          train_accuracies=train_accuracies)"""
+          train_accuracies=train_accuracies)
 
 
 predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, model_name, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)

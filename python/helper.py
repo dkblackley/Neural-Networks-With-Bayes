@@ -58,8 +58,16 @@ def load_net(PATH, image_size, output_size):
     optim = optimizer.Adam(net.parameters(), lr=0.001)
     states = torch.load(PATH)
 
-    optim.load_state_dict(states['optimizer'])
-    net.load_state_dict(states['network'])
+    try:
+        net.load_state_dict(states['network'])
+        optim.load_state_dict(states['optimizer'])
+    except Exception as e:
+        net = model.Classifier(image_size, output_size, BBB=True)
+        optim = optimizer.Adam(net.parameters(), lr=0.001)
+
+        net.load_state_dict(states['network'])
+        optim.load_state_dict(states['optimizer'])
+
     net.train()
     return net, optim
 

@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as TF
 from efficientnet_pytorch import EfficientNet
-import BBB
+import BayesModel
 
 
 class Classifier(nn.Module):
@@ -22,6 +22,7 @@ class Classifier(nn.Module):
         self.drop_rate = dropout
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.output_size = output_size
+        self.BBB = BBB
 
         with torch.no_grad():
 
@@ -32,7 +33,7 @@ class Classifier(nn.Module):
         self.efficient_net_output = nn.Linear(encoder_size, 512)
 
         if BBB:
-            self.hidden_layer = BBB.BayesianLayer(512, 512)
+            self.hidden_layer = BayesModel.BayesianLayer(512, 512)
         else:
             self.hidden_layer = nn.Linear(512, 512)
         self.output_layer = nn.Linear(512, output_size)
@@ -44,54 +45,72 @@ class Classifier(nn.Module):
         :param dropout: bool for whether or not dropout should be applied
         :return: processed output
         """
+
+
+
         output = self.model.extract_features(input)
         output = self.pool(output)
         output = output.view(output.shape[0], -1)
 
-        if dropout:
+        if self.training:
             output = TF.dropout(output, self.drop_rate)
             output = self.efficient_net_output(output)
-            output = TF.dropout(output, self.drop_rate)
-
-            if BBB:
-                output = self.hidden_layer(output, sample)
-            else:
-                output = self.hidden_layer(output)
-
             output = TF.dropout(output, self.drop_rate)
         else:
             output = self.efficient_net_output(output)
 
-            if BBB:
-                output = self.hidden_layer(output, sample)
-            else:
-                output = self.hidden_layer(output)
+
+        if dropout:
+            output = self.hidden_layer(output)
+            output = TF.dropout(output, self.drop_rate)
+
+        elif self.BBB and self.training:
+            return output
+
+        elif self.BBB:
+            #output = self.hidden_layer(output)
+            return output, self.output_layer(output)
+
+        elif self.training:
+            output = self.hidden_layer(output)
+            output = TF.dropout(output, self.drop_rate)
+
+        else:
+            output = self.hidden_layer(output)
 
         output = self.output_layer(output)
+        return output
+
+    def bayesian_sample(self, input, sample):
+        output = self.hidden_layer(input, sample=sample)
+        output = self.output_layer(output)
+
         return output
 
     #Methods for BBB
     def log_prior(self):
         return self.hidden_layer.log_prior
 
-    def log_varaitional_posterior(self):
-        return self.hidden_layer.log_varational_posterior
+    def log_variational_posterior(self):
+        return self.hidden_layer.log_variational_posterior
 
-    def sample_elbo(self, input, target, batch_size, n_classes, num_batches, samples=SAMPLES):
+    def sample_elbo(self, input, target, batch_size, n_classes, num_batches, class_weights, samples=10):
 
         outputs = torch.zeros(samples, batch_size, n_classes)
         log_priors = torch.zeros(samples)
         log_variational_posteriors = torch.zeros(samples)
 
         for i in range(samples):
-            outputs[i] = self(input, sample=True)
+            outputs[i] = self.bayesian_sample(input, sample=True)
             log_priors[i] = self.log_prior()
             log_variational_posteriors[i] = self.log_variational_posterior()
 
         log_prior = log_priors.mean()
         log_variational_posterior = log_variational_posteriors.mean()
-        negative_log_likelihood = TF.nll_loss(outputs.mean(0), target, size_average=False)
+        #negative_log_likelihood = TF.nll_loss(outputs.mean(0), target, reduction='sum')
+        #negative_log_likelihood = TF.nll_loss(outputs.mean(0), target, class_weights, reduction='sum')
+        negative_log_likelihood = TF.cross_entropy(outputs.mean(0), target, weight=class_weights, reduction='mean')
         loss = (log_variational_posterior - log_prior) / num_batches + negative_log_likelihood
-        return loss
+        return loss, outputs.mean(0)
 
 
