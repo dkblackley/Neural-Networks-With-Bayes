@@ -30,7 +30,12 @@ class Classifier(nn.Module):
         # Initialises the classification head for generating predictions.
 
         self.efficient_net_output = nn.Linear(encoder_size, 512)
-        self.hidden_layer = nn.Linear(512, 512)
+
+        self.hidden_layer1 = nn.Linear(512, 512)
+        self.hidden_layer2 = nn.Linear(512, 512)
+        self.hidden_layer3 = nn.Linear(512, 512)
+        self.hidden_layer4 = nn.Linear(512, 512)
+
         self.output_layer = nn.Linear(512, output_size)
 
     def forward(self, input, dropout=False):
@@ -48,17 +53,34 @@ class Classifier(nn.Module):
             output = TF.dropout(output, self.drop_rate)
             output = self.efficient_net_output(output)
             output = TF.dropout(output, self.drop_rate)
-            output = self.hidden_layer(output)
+            output = self.hidden_layer1(output)
+            output = TF.dropout(output, self.drop_rate)
+            output = self.hidden_layer2(output)
+            output = TF.dropout(output, self.drop_rate)
+            output = self.hidden_layer3(output)
+            output = TF.dropout(output, self.drop_rate)
+            output = self.hidden_layer4(output)
+            output = TF.dropout(output, self.drop_rate)
 
         elif dropout:
 
             output = self.efficient_net_output(output)
-            output = self.hidden_layer(output)
+            output = self.hidden_layer1(output)
             output = TF.dropout(output, self.drop_rate)
+            output = self.hidden_layer2(output)
+            output = TF.dropout(output, self.drop_rate)
+            output = self.hidden_layer3(output)
+            output = TF.dropout(output, self.drop_rate)
+            output = self.hidden_layer4(output)
+            output = TF.dropout(output, self.drop_rate)
+
         else:
 
             output = self.efficient_net_output(output)
-            output = self.hidden_layer(output)
+            output = self.hidden_layer1(output)
+            output = self.hidden_layer2(output)
+            output = self.hidden_layer3(output)
+            output = self.hidden_layer4(output)
 
         output = self.output_layer(output)
         return output

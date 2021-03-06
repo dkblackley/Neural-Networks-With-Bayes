@@ -16,19 +16,21 @@ import helper
 import model
 import torch.nn as nn
 from tqdm import tqdm
+import os
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 0
+EPOCHS = 2
 UNKNOWN_CLASS = False
-DEBUG = False  # Toggle this to only run for 1% of the training data
+DEBUG = True  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
 MC_DROPOUT = False
 COST_MATRIX = False
 TEST_COST_MATRIX = False
-FORWARD_PASSES = 100
+FORWARD_PASSES = 2
 BBB = False
+SAVE_DIR = "saved_model"
 image_size = 224
 test_indexes = []
 test_size = 0
@@ -182,7 +184,7 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
     training accuracy per epoch
     """
 
-    input("\nHave you remembered to move the model out of saved model before loading in the best model?")
+    #input("\nHave you remembered to move the model out of saved model before loading in the best model?")
 
     intervals = []
     if not val_accuracy:
@@ -299,19 +301,19 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
         data_plot.plot_loss(intervals, val_losses, train_losses)
         data_plot.plot_validation(intervals, val_accuracy, train_accuracy)
 
-        save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, "saved_model/")
+        save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, SAVE_DIR)
 
         if best_val < max(val_accuracy):
-            save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, "best_model/")
+            save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, SAVE_DIR + "best_model/")
             best_val = max(val_accuracy)
 
         if best_loss > min(val_losses):
-            save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, "best_loss/")
+            save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, SAVE_DIR + "best_loss/")
             best_loss = min(val_losses)
 
     data_plot.plot_loss(intervals, val_losses, train_losses)
     data_plot.plot_validation(intervals, val_accuracy, train_accuracy)
-    save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, "saved_model/")
+    save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, SAVE_DIR)
 
     return intervals, val_losses, train_losses, val_accuracy, train_accuracy
 
@@ -414,6 +416,10 @@ def test(testing_set, verbose=False):
     return accuracy, average_loss, confusion_matrix
 
 def save_network(optim, val_losses, train_losses, val_accuracies, train_accuracies, root_dir):
+
+    if not os.path.isdir(root_dir):
+        os.mkdir(root_dir)
+
     helper.save_net(network, optim, root_dir + "model_parameters")
     helper.write_csv(val_losses, root_dir + "val_losses.csv")
     helper.write_csv(train_losses, root_dir + "train_losses.csv")
@@ -577,7 +583,7 @@ def print_metrics(model_name):
 
 #model_name = "best_model/"
 #model_name = "best_loss/"
-model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
+#SAVE_DIR = "saved_models/Classifier 80 EPOCHs/best_model/"
 #model_name = "saved_model/"
 
 
@@ -586,7 +592,7 @@ model_name = "saved_models/Classifier 80 EPOCHs/best_model/"
 #train_net(model_name)
 #helper.plot_samples(train_data, data_plot)
 
-network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(model_name, 8)
+#network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR, 8)
 # network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/", 8)
 
 #test(val_set, verbose=True)
@@ -598,31 +604,50 @@ network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_
           val_accuracies=val_accuracies,
           train_accuracies=train_accuracies)"""
 
-
-"""predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, model_name, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
-helper.write_rows(predictions_mc_entropy, model_name + "mc_entropy_predictions.csv")
-helper.write_rows(predictions_mc_var, model_name + "mc_variance_predictions.csv")
-helper.write_rows(costs_mc, model_name + "mc_costs.csv")
-
-predictions_softmax, costs_softmax = testing.predict(test_set, model_name, network, test_size, softmax=True)
-helper.write_rows(predictions_softmax, model_name + "softmax_predictions.csv")
-helper.write_rows(costs_softmax, model_name + "softmax_costs.csv")"""
+if not os.path.exists("saved_models/"):
+    os.mkdir("saved_models/")
 
 
-predictions_softmax = helper.read_rows(model_name + "softmax_predictions.csv")
-predictions_mc = helper.read_rows(model_name + "mc_entropy_predictions.csv")
+for i in range(0, 10):
 
-costs_mc = helper.read_rows(model_name + "costs/mc_forward_pass_99_costs.csv")
-costs_sr = helper.read_rows(model_name + "softmax_costs.csv")
-#predictions_mc = helper.read_rows(model_name + "mc_entropy_predictions.csv")
-#predictions_mc = helper.read_rows(model_name + "mc_predictions.csv")
+    SAVE_DIR = f"saved_models/Classifier_{i}/"
 
-predictions_softmax = helper.string_to_float(predictions_softmax)
-predictions_mc = helper.string_to_float(predictions_mc)
+    train_net(SAVE_DIR)
 
-costs_mc = helper.string_to_float(costs_mc)
-costs_sr = helper.string_to_float(costs_sr)
+    SAVE_DIR = SAVE_DIR + "best_model/"
 
-print_metrics(model_name)
+    network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR, 8)
+
+    if not os.path.exists(SAVE_DIR + "/naturallog/"):
+        os.mkdir(SAVE_DIR + "/naturallog/")
+        os.mkdir(SAVE_DIR + "/variance/")
+        os.mkdir(SAVE_DIR + "/costs/")
+
+
+    predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, SAVE_DIR, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
+    helper.write_rows(predictions_mc_entropy, SAVE_DIR + "mc_entropy_predictions.csv")
+    helper.write_rows(predictions_mc_var, SAVE_DIR + "mc_variance_predictions.csv")
+    helper.write_rows(costs_mc, SAVE_DIR + "mc_costs.csv")
+
+    predictions_softmax, costs_softmax = testing.predict(test_set, SAVE_DIR, network, test_size, softmax=True)
+    helper.write_rows(predictions_softmax, SAVE_DIR + "softmax_predictions.csv")
+    helper.write_rows(costs_softmax, SAVE_DIR + "softmax_costs.csv")
+
+
+    predictions_softmax = helper.read_rows(SAVE_DIR + "softmax_predictions.csv")
+    predictions_mc = helper.read_rows(SAVE_DIR + "mc_entropy_predictions.csv")
+
+    costs_mc = helper.read_rows(SAVE_DIR + "costs/mc_forward_pass_99_costs.csv")
+    costs_sr = helper.read_rows(SAVE_DIR + "softmax_costs.csv")
+    #predictions_mc = helper.read_rows(model_name + "mc_entropy_predictions.csv")
+    #predictions_mc = helper.read_rows(model_name + "mc_predictions.csv")
+
+    predictions_softmax = helper.string_to_float(predictions_softmax)
+    predictions_mc = helper.string_to_float(predictions_mc)
+
+    costs_mc = helper.string_to_float(costs_mc)
+    costs_sr = helper.string_to_float(costs_sr)
+
+    #print_metrics(SAVE_DIR)
 
 
