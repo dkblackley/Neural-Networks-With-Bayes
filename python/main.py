@@ -4,7 +4,7 @@ Deals with things like weight balancing, training and testing methods and
 calling other classes for plotting results of the network
 """
 
-EPOCHS = 10
+EPOCHS = 100
 UNKNOWN_CLASS = False
 DEBUG = False #Toggle this to only run for 1% of the training data
 ENABLE_GPU = True  # Toggle this to enable or disable GPU
@@ -13,7 +13,7 @@ SOFTMAX = True
 MC_DROPOUT = False
 COST_MATRIX = False
 TEST_COST_MATRIX = False
-FORWARD_PASSES = 2
+FORWARD_PASSES = 100
 BBB = False
 SAVE_DIR = "saved_model"
 
