@@ -378,7 +378,7 @@ def test(testing_set, verbose=False):
                     loss = network.BBB_loss + efficientNet_loss
 
                 else:
-                    outputs = network(image_batch, dropout=True)
+                    outputs = network(image_batch)
                     loss = loss_function(outputs, label_batch)
 
 
