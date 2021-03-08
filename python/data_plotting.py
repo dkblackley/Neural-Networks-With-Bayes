@@ -76,7 +76,7 @@ class DataPlotting:
         plt.ioff()
         plt.show()
 
-    def plot_loss(self, epochs, loss_values_val, loss_values_test):
+    def plot_loss(self, save_dir, epochs, loss_values_val, loss_values_test):
         """
         Plots the learning curve
         :param epochs: number of epochs
@@ -90,10 +90,10 @@ class DataPlotting:
         plt.xlabel("Epoch")
         plt.ylabel("Loss value")
         plt.legend(loc='best')
-        plt.savefig("saved_model/loss.png")
+        plt.savefig(save_dir + "loss.png")
         plt.show()
 
-    def plot_validation(self, epochs, results_val, results_test):
+    def plot_validation(self, save_dir, epochs, results_val, results_test):
         """
         Plots the accuracies over time
         :param epochs: epochs over which the data set was run
@@ -111,7 +111,7 @@ class DataPlotting:
         mini = min([min(results_test) - 10, min(results_val) - 10])
 
         plt.ylim([mini, maxi])
-        plt.savefig("saved_model/accuracy.png")
+        plt.savefig(save_dir + "accuracy.png")
         plt.show()
 
     def plot_confusion(self, array, root_dir, title):

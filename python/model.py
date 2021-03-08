@@ -12,7 +12,7 @@ class Classifier(nn.Module):
     """
     Class that holds and runs the efficientnet CNN
     """
-    def __init__(self, image_size, output_size, class_weights, dropout=0.5, BBB=False):
+    def __init__(self, image_size, output_size, class_weights, device, dropout=0.5, BBB=False):
         """
         init function sets the type of efficientnet and any extra layers
         :param dropout: rate for dropout
@@ -24,6 +24,7 @@ class Classifier(nn.Module):
         self.output_size = output_size
         self.BBB = BBB
         self.class_weights = class_weights
+        self.device = device
 
         with torch.no_grad():
 
@@ -34,8 +35,8 @@ class Classifier(nn.Module):
         self.efficient_net_output = nn.Linear(encoder_size, 512)
 
         if BBB:
-            self.hidden_layer = BayesModel.BayesianLayer(512, 512)
-            self.hidden_layer2 = BayesModel.BayesianLayer(512, 512)
+            self.hidden_layer = BayesModel.BayesianLayer(512, 512, device)
+            self.hidden_layer2 = BayesModel.BayesianLayer(512, 512, device)
         else:
             self.hidden_layer = nn.Linear(512, 512)
             self.hidden_layer2 = nn.Linear(512, 512)
@@ -55,7 +56,7 @@ class Classifier(nn.Module):
 
         if self.training:
             output = TF.dropout(output, self.drop_rate)
-            output = self.efficient_net_output(output)
+            output = TF.relu(self.efficient_net_output(output))
             output = TF.dropout(output, self.drop_rate)
         else:
             output = self.efficient_net_output(output)
@@ -98,13 +99,13 @@ class Classifier(nn.Module):
         return self.hidden_layer.log_variational_posterior + self.hidden_layer2.log_variational_posterior
 
     def sample_elbo(self, input, target, samples=10, n_classes=8):
-
+        
         num_batches = 555
         batch_size = input.size()[0]
 
-        outputs = torch.zeros(samples, batch_size, n_classes)
-        log_priors = torch.zeros(samples)
-        log_variational_posteriors = torch.zeros(samples)
+        outputs = torch.zeros(samples, batch_size, n_classes).to(self.device)
+        log_priors = torch.zeros(samples).to(self.device)
+        log_variational_posteriors = torch.zeros(samples).to(self.device)
 
         for i in range(samples):
             outputs[i] = self.bayesian_sample(input)
@@ -113,7 +114,8 @@ class Classifier(nn.Module):
 
         log_prior = log_priors.mean()
         log_variational_posterior = log_variational_posteriors.mean()
-
+        
+    
         negative_log_likelihood = TF.cross_entropy(outputs.mean(0), target, weight=self.class_weights, reduction='sum')
 
         KL_divergence = (log_variational_posterior - log_prior)

@@ -4,10 +4,10 @@ Deals with things like weight balancing, training and testing methods and
 calling other classes for plotting results of the network
 """
 
-EPOCHS = 2
+EPOCHS = 10
 UNKNOWN_CLASS = False
-DEBUG = True  # Toggle this to only run for 1% of the training data
-ENABLE_GPU = False  # Toggle this to enable or disable GPU
+DEBUG = False #Toggle this to only run for 1% of the training data
+ENABLE_GPU = True  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
 MC_DROPOUT = False
@@ -165,11 +165,11 @@ else:
     loss_function = nn.CrossEntropyLoss(weight=class_weights)
 
 if UNKNOWN_CLASS:
-    network = model.Classifier(image_size, 7, class_weights, dropout=0.5, BBB=BBB)
+    network = model.Classifier(image_size, 7, class_weights, device, dropout=0.5, BBB=BBB)
     network.to(device)
     weights = [3188, 8985, 2319, 602, 1862, 164, 170]
 else:
-    network = model.Classifier(image_size, 8, class_weights, dropout=0.5, BBB=BBB)
+    network = model.Classifier(image_size, 8, class_weights, device, dropout=0.5, BBB=BBB)
     network.to(device)
     weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
 
@@ -317,9 +317,12 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
         accuracy, val_loss, _ = test(val_set, verbose=verbose)
         val_losses.append(val_loss)
         val_accuracy.append(accuracy)
+        
+        if not os.path.isdir(SAVE_DIR):
+            os.mkdir(SAVE_DIR)
 
-        data_plot.plot_loss(intervals, val_losses, train_losses)
-        data_plot.plot_validation(intervals, val_accuracy, train_accuracy)
+        data_plot.plot_loss(SAVE_DIR, intervals, val_losses, train_losses)
+        data_plot.plot_validation(SAVE_DIR, intervals, val_accuracy, train_accuracy)
 
         save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, SAVE_DIR)
 
@@ -331,8 +334,8 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
             save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, SAVE_DIR + "best_loss/")
             best_loss = min(val_losses)
 
-    data_plot.plot_loss(intervals, val_losses, train_losses)
-    data_plot.plot_validation(intervals, val_accuracy, train_accuracy)
+    data_plot.plot_loss(SAVE_DIR, intervals, val_losses, train_losses)
+    data_plot.plot_validation(SAVE_DIR, intervals, val_accuracy, train_accuracy)
     save_network(optim, val_losses, train_losses, val_accuracy, train_accuracy, SAVE_DIR)
 
     return intervals, val_losses, train_losses, val_accuracy, train_accuracy
@@ -449,7 +452,7 @@ def test(testing_set, verbose=False):
     return accuracy, average_loss, confusion_matrix
 
 def save_network(optim, val_losses, train_losses, val_accuracies, train_accuracies, root_dir):
-
+    
     if not os.path.isdir(root_dir):
         os.mkdir(root_dir)
 
@@ -481,9 +484,9 @@ def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_ac
     starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(
         starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies, verbose=True)
 
-    if not DEBUG:
+    #if not DEBUG:
 
-        if UNKNOWN_CLASS:
+    """if UNKNOWN_CLASS:
             # could replace with a for loop
             predictions_sr = testing.predict(val_set, network, val_size, softmax=True)
             confusion_matrix = helper.predictions_to_confusion()
@@ -514,7 +517,7 @@ def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_ac
             _, __, confusion_matrix = test(test_set, verbose=True)
             data_plot.plot_confusion(confusion_matrix, root_dir, "Testing Set")
             confusion_matrix = helper.confusion_array(confusion_matrix)
-            data_plot.plot_confusion(confusion_matrix, root_dir, "Testing Set Normalized")
+            data_plot.plot_confusion(confusion_matrix, root_dir, "Testing Set Normalized")"""
 
 
     return val_losses, train_losses, val_accuracies, train_accuracies
@@ -643,13 +646,22 @@ if not os.path.exists("saved_models/"):
     os.mkdir("saved_models/")
 
 for i in range(0, 10):
-
+    
+    network = model.Classifier(image_size, 8, class_weights, device, dropout=0.5, BBB=BBB)
+    network.to(device)
+    optim = optimizer.Adam(network.parameters(), lr=0.001)
+    
     if BBB:
         SAVE_DIR = f"saved_models/BBB_Classifier_{i}/"
     else:
         SAVE_DIR = f"saved_models/Classifier_{i}/"
 
-    #train_net(SAVE_DIR)
+    train_net(SAVE_DIR, 
+              starting_epoch=0,
+              val_losses=[],
+              train_losses=[],
+              val_accuracies=[],
+              train_accuracies=[])
 
     SAVE_DIR = SAVE_DIR + "best_model/"
 

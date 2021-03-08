@@ -53,8 +53,8 @@ def change_to_device(network, optim, device):
 
     return network, optim
 
-def load_net(PATH, image_size, output_size, class_weights):
-    net = model.Classifier(image_size, output_size, class_weights)
+def load_net(PATH, image_size, output_size, device, class_weights):
+    net = model.Classifier(image_size, output_size, device, class_weights)
     optim = optimizer.Adam(net.parameters(), lr=0.001)
     states = torch.load(PATH)
 
@@ -62,14 +62,17 @@ def load_net(PATH, image_size, output_size, class_weights):
         net.load_state_dict(states['network'])
         optim.load_state_dict(states['optimizer'])
     except Exception as e:
-        net = model.Classifier(image_size, output_size, class_weights, BBB=True)
+        net = model.Classifier(image_size, output_size, device, class_weights, BBB=True)
         optim = optimizer.Adam(net.parameters(), lr=0.001)
 
         net.load_state_dict(states['network'])
         optim.load_state_dict(states['optimizer'])
 
     net.train()
-    return net, optim
+    
+    
+    
+    return change_to_device(network, optim, device)
 
 def get_mean_and_std(data_set):
     """
