@@ -16,11 +16,12 @@ import helper
 import model
 import torch.nn as nn
 from tqdm import tqdm
+import os
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 EPOCHS = 25
 UNKNOWN_CLASS = False
-DEBUG = False  # Toggle this to only run for 1% of the training data
+DEBUG = True  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
@@ -139,19 +140,7 @@ data_plot = data_plotting.DataPlotting(UNKNOWN_CLASS, test_data, test_indexes)
 #helper.count_classes(val_set, BATCH_SIZE)
 #helper.count_classes(test_set, BATCH_SIZE)
 
-if UNKNOWN_CLASS:
-    network = model.Classifier(image_size, 7, dropout=0.5, BBB=BBB)
-    network.to(device)
-    weights = [3188, 8985, 2319, 602, 1862, 164, 170]
-else:
-    network = model.Classifier(image_size, 8, dropout=0.5, BBB=BBB)
-    network.to(device)
-    weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
-
-optim = optimizer.Adam(network.parameters(), lr=0.001)
-
-#weights = list(helper.count_classes(train_set, BATCH_SIZE).values())
-
+weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
 
 new_weights = []
 index = 0
@@ -171,6 +160,22 @@ if COST_MATRIX:
     loss_function = nn.CrossEntropyLoss(weight=class_weights, reduction='none')
 else:
     loss_function = nn.CrossEntropyLoss(weight=class_weights)
+
+if UNKNOWN_CLASS:
+    network = model.Classifier(image_size, 7, class_weights, dropout=0.5, BBB=BBB)
+    network.to(device)
+    weights = [3188, 8985, 2319, 602, 1862, 164, 170]
+else:
+    network = model.Classifier(image_size, 8, class_weights, dropout=0.5, BBB=BBB)
+    network.to(device)
+    weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
+
+optim = optimizer.Adam(network.parameters(), lr=0.001)
+
+#weights = list(helper.count_classes(train_set, BATCH_SIZE).values())
+
+
+
 
 
 def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy, verbose=False):
@@ -224,24 +229,16 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
 
             if BBB:
 
-                #network.freeze_BbB()
-                efficientNet_output = network(image_batch)
-                #network.unfreeze_all()
+                outputs = network(image_batch, label_batch)
 
-                #network.freeze_efficientNet()
-                BbB_loss, cross_entropy, outputs = network.sample_elbo(efficientNet_output, label_batch, efficientNet_output.size()[0], 8,
-                                                                       len(train_set), class_weights)
-                #network.unfreeze_all()
+
+                print(outputs.size()[0], len(train_set), class_weights)
 
                 efficientNet_loss = loss_function(outputs, label_batch)
 
-                loss = BbB_loss + efficientNet_loss
-
+                loss = network.BBB_loss + efficientNet_loss
                 loss.backward()
                 optim.step()
-
-                # For easy to read graphing purposes
-                #loss = cross_entropy
 
             else:
                 outputs = network(image_batch, dropout=True)
@@ -618,31 +615,50 @@ train_net(model_name,
           val_accuracies=val_accuracies,
           train_accuracies=train_accuracies)
 
+if BBB:
+    predictions_BBB_entropy, predictions_BBB_var, costs_BBB = testing.predict(test_set, model_name, network, test_size,
+                                                                           BBB=True,
+                                                                           forward_passes=FORWARD_PASSES)
+    helper.write_rows(predictions_BBB_entropy, model_name + "BBB_entropy_predictions.csv")
+    helper.write_rows(predictions_BBB_var, model_name + "BBB_variance_predictions.csv")
+    helper.write_rows(costs_BBB, model_name + "BBB_costs.csv")
 
-predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, model_name, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
-helper.write_rows(predictions_mc_entropy, model_name + "mc_entropy_predictions.csv")
-helper.write_rows(predictions_mc_var, model_name + "mc_variance_predictions.csv")
-helper.write_rows(costs_mc, model_name + "mc_costs.csv")
+    predictions_mc = helper.read_rows(model_name + "BBB_entropy_predictions.csv")
 
-predictions_softmax, costs_softmax = testing.predict(test_set, model_name, network, test_size, softmax=True)
-helper.write_rows(predictions_softmax, model_name + "softmax_predictions.csv")
-helper.write_rows(costs_softmax, model_name + "softmax_costs.csv")
+    costs_BBB = helper.read_rows(model_name + "costs/BBB_forward_pass_99_costs.csv")
+    predictions_BBB = helper.read_rows(model_name + "BBB_variance_predictions.csv")
+    predictions_BBB = helper.read_rows(model_name + "BBB_entropy_predictions.csv")
 
 
-predictions_softmax = helper.read_rows(model_name + "softmax_predictions.csv")
-predictions_mc = helper.read_rows(model_name + "mc_entropy_predictions.csv")
+    predictions_BBB = helper.string_to_float(predictions_BBB)
 
-costs_mc = helper.read_rows(model_name + "costs/mc_forward_pass_99_costs.csv")
-costs_sr = helper.read_rows(model_name + "softmax_costs.csv")
-#predictions_mc = helper.read_rows(model_name + "mc_entropy_predictions.csv")
-#predictions_mc = helper.read_rows(model_name + "mc_predictions.csv")
+    costs_BBB = helper.string_to_float(costs_BBB)
 
-predictions_softmax = helper.string_to_float(predictions_softmax)
-predictions_mc = helper.string_to_float(predictions_mc)
+else:
 
-costs_mc = helper.string_to_float(costs_mc)
-costs_sr = helper.string_to_float(costs_sr)
+    predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, model_name, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
+    helper.write_rows(predictions_mc_entropy, model_name + "mc_entropy_predictions.csv")
+    helper.write_rows(predictions_mc_var, model_name + "mc_variance_predictions.csv")
+    helper.write_rows(costs_mc, model_name + "mc_costs.csv")
 
-print_metrics(model_name)
+    predictions_softmax, costs_softmax = testing.predict(test_set, model_name, network, test_size, softmax=True)
+    helper.write_rows(predictions_softmax, model_name + "softmax_predictions.csv")
+    helper.write_rows(costs_softmax, model_name + "softmax_costs.csv")
+
+
+    predictions_softmax = helper.read_rows(model_name + "softmax_predictions.csv")
+    predictions_mc = helper.read_rows(model_name + "mc_entropy_predictions.csv")
+
+    costs_mc = helper.read_rows(model_name + "costs/mc_forward_pass_99_costs.csv")
+    costs_sr = helper.read_rows(model_name + "softmax_costs.csv")
+
+
+    predictions_softmax = helper.string_to_float(predictions_softmax)
+    predictions_mc = helper.string_to_float(predictions_mc)
+
+    costs_mc = helper.string_to_float(costs_mc)
+    costs_sr = helper.string_to_float(costs_sr)
+
+#print_metrics(model_name)
 
 

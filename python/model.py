@@ -12,7 +12,7 @@ class Classifier(nn.Module):
     """
     Class that holds and runs the efficientnet CNN
     """
-    def __init__(self, image_size, output_size, dropout=0.5, BBB=False):
+    def __init__(self, image_size, output_size, class_weights, dropout=0.5, BBB=False):
         """
         init function sets the type of efficientnet and any extra layers
         :param dropout: rate for dropout
@@ -23,6 +23,7 @@ class Classifier(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.output_size = output_size
         self.BBB = BBB
+        self.class_weights = class_weights
 
         with torch.no_grad():
 
@@ -37,10 +38,10 @@ class Classifier(nn.Module):
             self.hidden_layer2 = BayesModel.BayesianLayer(512, 512)
         else:
             self.hidden_layer = nn.Linear(512, 512)
-            self.hidden_layer = nn.Linear2(512, 512)
+            self.hidden_layer2 = nn.Linear2(512, 512)
         self.output_layer = nn.Linear(512, output_size)
 
-    def forward(self, input, dropout=False, sample=False):
+    def forward(self, input, labels=None, dropout=False):
         """
         Method for handling a forward pass though the network, applies dropout using nn.functional
         :param input: input batch to be processed
@@ -63,31 +64,37 @@ class Classifier(nn.Module):
 
 
         if dropout:
-            output = self.hidden_layer(output)
+            output = TF.relu(self.hidden_layer(output))
+            output = TF.dropout(output, self.drop_rate)
+            output = TF.relu(self.hidden_layer2(output))
             output = TF.dropout(output, self.drop_rate)
 
-        elif self.BBB and self.training:
-            return output
-
-
         elif self.BBB:
-            #output = self.hidden_layer(output, sample=True)
-            #output = self.hidden_layer2(output, sample=True)
+
+            if self.training:
+                output = self.sample_elbo(output, labels)
+            else:
+                output = TF.relu(self.hidden_layer(output))
+                output = TF.relu(self.hidden_layer2(output))
+                output = self.output_layer(output)
             return output
 
         elif self.training:
-            output = self.hidden_layer(output)
+            output = TF.relu(self.hidden_layer(output))
+            output = TF.dropout(output, self.drop_rate)
+            output = TF.relu(self.hidden_layer2(output))
             output = TF.dropout(output, self.drop_rate)
 
         else:
             output = self.hidden_layer(output)
+            output = self.hidden_layer2(output)
 
         output = self.output_layer(output)
         return output
 
-    def bayesian_sample(self, input, sample, log_prob):
-        output = self.hidden_layer(input, sample=sample, calc_log_probs=log_prob)
-        output = self.hidden_layer2(output, sample=sample, calc_log_probs=log_prob)
+    def bayesian_sample(self, input):
+        output = TF.relu(self.hidden_layer(input))
+        output = TF.relu(self.hidden_layer2(output))
         output = self.output_layer(output)
 
         return output
@@ -99,23 +106,24 @@ class Classifier(nn.Module):
     def log_variational_posterior(self):
         return self.hidden_layer.log_variational_posterior + self.hidden_layer2.log_variational_posterior
 
-    def sample_elbo(self, input, target, batch_size, n_classes, num_batches, class_weights, samples=10):
+    def sample_elbo(self, input, target, samples=10, n_classes=8):
+
+        num_batches = 555
+        batch_size = input.size()[0]
 
         outputs = torch.zeros(samples, batch_size, n_classes)
         log_priors = torch.zeros(samples)
         log_variational_posteriors = torch.zeros(samples)
 
         for i in range(samples):
-            outputs[i] = self.bayesian_sample(input, True, True)
+            outputs[i] = self.bayesian_sample(input)
             log_priors[i] = self.log_prior()
             log_variational_posteriors[i] = self.log_variational_posterior()
 
         log_prior = log_priors.mean()
         log_variational_posterior = log_variational_posteriors.mean()
-        #negative_log_likelihood = TF.nll_loss(outputs.mean(0), target, reduction='sum')
-        #negative_log_likelihood = TF.nll_loss(outputs.mean(0), target, weight=class_weights, reduction='sum')
 
-        negative_log_likelihood = TF.cross_entropy(outputs.mean(0), target, weight=class_weights, reduction='sum')
+        negative_log_likelihood = TF.cross_entropy(outputs.mean(0), target, weight=self.class_weights, reduction='sum')
 
         KL_divergence = (log_variational_posterior - log_prior)
         loss = KL_divergence / num_batches + negative_log_likelihood
@@ -126,6 +134,8 @@ class Classifier(nn.Module):
         if torch.isnan(loss):
             print("nan loss detected")
 
-        return loss, negative_log_likelihood, outputs.mean(0)
+        self.BBB_loss = loss
+
+        return outputs.mean(0)
 
 

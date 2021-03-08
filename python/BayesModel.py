@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as TF
 
-# Credit to https://www.nitarshan.com/bayes-by-backprop/, Used to create code and follow through the steps of BBB paper
+# Credit to https://www.nitarshan.com/bayes-by-backprop/, Tutorial was followed and adapted to suit my specific model
 class GaussianDistribution():
 
     def __init__(self, mu, rho):
@@ -69,18 +69,13 @@ class BayesianLayer(nn.Module):
 
         self.log_variational_posterior = 0
 
-    def forward(self, input, sample=False, calc_log_probs=False):
-        if self.training or sample:
-            weight = self.weight.sample_distribution()
-            bias = self.bias.sample_distribution()
-        else:
-            weight = self.weight.mu
-            bias = self.bias.mu
-        if self.training or calc_log_probs:
-            self.log_prior = self.weight_prior.log_prob(weight) + self.bias_prior.log_prob(bias)
-            self.log_variational_posterior = self.weight.log_prob(weight) + self.bias.log_prob(bias)
-        else:
-            self.log_prior, self.log_variational_posterior = 0, 0
+    def forward(self, input):
+
+        weight = self.weight.sample_distribution()
+        bias = self.bias.sample_distribution()
+
+        self.log_prior = self.weight_prior.log_prob(weight) + self.bias_prior.log_prob(bias)
+        self.log_variational_posterior = self.weight.log_prob(weight) + self.bias.log_prob(bias)
 
         return TF.linear(input, weight, bias)
 

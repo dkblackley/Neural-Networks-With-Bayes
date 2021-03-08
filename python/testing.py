@@ -275,7 +275,7 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
     return mean_entropy, mean_variance, costs
 
 
-def predict(test_set, root_dir, network, num_samples, n_classes=8, mc_dropout=False, forward_passes=100, softmax=False):
+def predict(test_set, root_dir, network, num_samples, n_classes=8, mc_dropout=False, BBB=False, forward_passes=100, softmax=False):
 
     print("Predicting on Test set")
 
@@ -288,3 +288,5 @@ def predict(test_set, root_dir, network, num_samples, n_classes=8, mc_dropout=Fa
     elif softmax:
         predictions, costs = softmax_pred(test_set, network, n_classes, num_samples)
         return predictions, costs
+    elif BBB:
+        pass
