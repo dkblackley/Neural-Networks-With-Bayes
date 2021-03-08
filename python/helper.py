@@ -11,6 +11,7 @@ import torch.optim as optimizer
 from copy import deepcopy
 import numpy as np
 
+
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
 
 def plot_image_at_index(data_plot, data_loader, index):
@@ -52,13 +53,21 @@ def change_to_device(network, optim, device):
 
     return network, optim
 
-def load_net(PATH, image_size, output_size):
-    net = model.Classifier(image_size, output_size)
+def load_net(PATH, image_size, output_size, class_weights):
+    net = model.Classifier(image_size, output_size, class_weights)
     optim = optimizer.Adam(net.parameters(), lr=0.001)
     states = torch.load(PATH)
 
-    optim.load_state_dict(states['optimizer'])
-    net.load_state_dict(states['network'])
+    try:
+        net.load_state_dict(states['network'])
+        optim.load_state_dict(states['optimizer'])
+    except Exception as e:
+        net = model.Classifier(image_size, output_size, class_weights, BBB=True)
+        optim = optimizer.Adam(net.parameters(), lr=0.001)
+
+        net.load_state_dict(states['network'])
+        optim.load_state_dict(states['optimizer'])
+
     net.train()
     return net, optim
 
@@ -613,3 +622,8 @@ def make_confusion_matrix(predictions, data_loader, test_indexes, cost_matrix, t
         total += 1
 
     return confusion_matrix
+
+
+
+
+
