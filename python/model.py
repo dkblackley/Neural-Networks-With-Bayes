@@ -77,14 +77,7 @@ class Classifier(nn.Module):
             else:
                 output = TF.relu(self.hidden_layer(output))
                 output = TF.relu(self.hidden_layer2(output))
-
-
-        elif self.training:
-            output = TF.relu(self.hidden_layer(output))
-            output = TF.dropout(output, self.drop_rate)
-            output = TF.relu(self.hidden_layer2(output))
-            output = TF.dropout(output, self.drop_rate)
-
+                
         else:
             output = TF.relu(self.hidden_layer(output))
             output = TF.relu(self.hidden_layer2(output))
