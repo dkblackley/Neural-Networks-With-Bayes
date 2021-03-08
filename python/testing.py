@@ -190,9 +190,6 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
             image_batch = sample_batch['image'].to(device)
             label_batch = sample_batch['label'].to(device)
 
-            if i_batch == 1:
-                print("HERE")
-
             with torch.no_grad():
                 if BBB:
                     outputs = soft_max(network(image_batch, labels=label_batch))

@@ -49,8 +49,6 @@ class Classifier(nn.Module):
         :return: processed output
         """
 
-
-
         output = self.model.extract_features(input)
         output = self.pool(output)
         output = output.view(output.shape[0], -1)
@@ -77,7 +75,7 @@ class Classifier(nn.Module):
             else:
                 output = TF.relu(self.hidden_layer(output))
                 output = TF.relu(self.hidden_layer2(output))
-                
+
         else:
             output = TF.relu(self.hidden_layer(output))
             output = TF.relu(self.hidden_layer2(output))

@@ -649,7 +649,7 @@ for i in range(0, 10):
     else:
         SAVE_DIR = f"saved_models/Classifier_{i}/"
 
-    train_net(SAVE_DIR)
+    #train_net(SAVE_DIR)
 
     SAVE_DIR = SAVE_DIR + "best_model/"
 
@@ -675,12 +675,12 @@ for i in range(0, 10):
 
     else:
 
-        predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, SAVE_DIR, network, test_size, mc_dropout=True, forward_passes=FORWARD_PASSES)
+        predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, SAVE_DIR, network, test_size, device, mc_dropout=True, forward_passes=FORWARD_PASSES)
         helper.write_rows(predictions_mc_entropy, SAVE_DIR + "mc_entropy_predictions.csv")
         helper.write_rows(predictions_mc_var, SAVE_DIR + "mc_variance_predictions.csv")
         helper.write_rows(costs_mc, SAVE_DIR + "mc_costs.csv")
 
-        predictions_softmax, costs_softmax = testing.predict(test_set, SAVE_DIR, network, test_size, softmax=True)
+        predictions_softmax, costs_softmax = testing.predict(test_set, SAVE_DIR, network, test_size, device, softmax=True)
         helper.write_rows(predictions_softmax, SAVE_DIR + "softmax_predictions.csv")
         helper.write_rows(costs_softmax, SAVE_DIR + "softmax_costs.csv")
 
