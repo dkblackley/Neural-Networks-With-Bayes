@@ -14,7 +14,7 @@ MC_DROPOUT = False
 COST_MATRIX = False
 TEST_COST_MATRIX = False
 FORWARD_PASSES = 2
-BBB = True
+BBB = False
 SAVE_DIR = "saved_model"
 
 
@@ -649,7 +649,7 @@ for i in range(0, 10):
     else:
         SAVE_DIR = f"saved_models/Classifier_{i}/"
 
-    #train_net(SAVE_DIR)
+    train_net(SAVE_DIR)
 
     SAVE_DIR = SAVE_DIR + "best_model/"
 
@@ -668,7 +668,7 @@ for i in range(0, 10):
         helper.write_rows(predictions_BBB_var, SAVE_DIR + "BBB_variance_predictions.csv")
         helper.write_rows(costs_BBB, SAVE_DIR + "BBB_costs.csv")
 
-        costs_BBB = helper.read_rows(SAVE_DIR + "costs/BBB_forward_pass_99_costs.csv")
+        costs_BBB = helper.read_rows(SAVE_DIR + "costs/BBB_forward_pass_1_costs.csv")
         predictions_BBB = helper.read_rows(SAVE_DIR + "BBB_variance_predictions.csv")
         predictions_BBB = helper.read_rows(SAVE_DIR + "BBB_entropy_predictions.csv")
 
