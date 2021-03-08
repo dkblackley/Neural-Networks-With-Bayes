@@ -38,10 +38,10 @@ class Classifier(nn.Module):
             self.hidden_layer2 = BayesModel.BayesianLayer(512, 512)
         else:
             self.hidden_layer = nn.Linear(512, 512)
-            self.hidden_layer2 = nn.Linear2(512, 512)
+            self.hidden_layer2 = nn.Linear(512, 512)
         self.output_layer = nn.Linear(512, output_size)
 
-    def forward(self, input, labels=None, dropout=False):
+    def forward(self, input, labels=None, sample=False, dropout=False):
         """
         Method for handling a forward pass though the network, applies dropout using nn.functional
         :param input: input batch to be processed
@@ -71,13 +71,13 @@ class Classifier(nn.Module):
 
         elif self.BBB:
 
-            if self.training:
+            if self.training or sample:
                 output = self.sample_elbo(output, labels)
+                return output
             else:
                 output = TF.relu(self.hidden_layer(output))
                 output = TF.relu(self.hidden_layer2(output))
-                output = self.output_layer(output)
-            return output
+
 
         elif self.training:
             output = TF.relu(self.hidden_layer(output))
@@ -86,8 +86,8 @@ class Classifier(nn.Module):
             output = TF.dropout(output, self.drop_rate)
 
         else:
-            output = self.hidden_layer(output)
-            output = self.hidden_layer2(output)
+            output = TF.relu(self.hidden_layer(output))
+            output = TF.relu(self.hidden_layer2(output))
 
         output = self.output_layer(output)
         return output
