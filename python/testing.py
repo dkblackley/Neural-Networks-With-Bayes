@@ -117,14 +117,16 @@ def predict_ISIC(data_set, data_loader, network, device, forward_passes, softmax
 
     return predictions
 
-def softmax_pred(data_set, network, n_classes, n_samples):
+def softmax_pred(data_set, network, n_classes, n_samples, device):
 
     costs = []
     predictions = np.empty((0, n_classes))
     soft_max = nn.Softmax(dim=1)
 
+    network.eval()
+
     for i_batch, sample_batch in enumerate(tqdm(data_set)):
-        image_batch = sample_batch['image']
+        image_batch = sample_batch['image'].to(device)
         with torch.no_grad():
             outputs = soft_max(network(image_batch, dropout=False))
 
@@ -165,7 +167,7 @@ def softmax_pred(data_set, network, n_classes, n_samples):
     return predictions, costs
 
 
-def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_dir):
+def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_dir, device, BBB):
 
     #costs = np.empty((0, n_samples, n_classes))
     # Add one for the entropy
@@ -173,6 +175,8 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
     soft_max = nn.Softmax(dim=1)
     drop_predictions = np.empty((0, n_samples, n_classes))
     costs = np.empty((0, n_samples, n_classes))
+
+    network.eval()
 
 
     for i in tqdm(range(0, forward_passes)):
@@ -183,11 +187,17 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
 
 
         for i_batch, sample_batch in enumerate(data_set):
-            image_batch = sample_batch['image']
+            image_batch = sample_batch['image'].to(device)
+            label_batch = sample_batch['label'].to(device)
+
+            if i_batch == 1:
+                print("HERE")
 
             with torch.no_grad():
-                outputs = soft_max(network(image_batch, dropout=True))
-
+                if BBB:
+                    outputs = soft_max(network(image_batch, labels=label_batch))
+                else:
+                    outputs = soft_max(network(image_batch, dropout=True))
             for output in outputs:
                 answers = output.cpu().numpy()
 
@@ -240,16 +250,21 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
 
         if i == 3:
             temp2 = np.array(mean_variance)
-
-        helper.write_rows(mean_entropy, root_dir + f"naturallog/mc_forward_pass_{i}_entropy.csv")
-        helper.write_rows(mean_variance, root_dir + f"variance/mc_forward_pass_{i}_variance.csv")
-        helper.write_rows(costs_mean, root_dir + f"costs/mc_forward_pass_{i}_costs.csv")
+        if BBB:
+            helper.write_rows(mean_entropy, root_dir + f"naturallog/BBB_forward_pass_{i}_entropy.csv")
+            helper.write_rows(mean_variance, root_dir + f"variance/BBB_forward_pass_{i}_variance.csv")
+            helper.write_rows(costs_mean, root_dir + f"costs/BBB_forward_pass_{i}_costs.csv")
+        else:
+            helper.write_rows(mean_entropy, root_dir + f"naturallog/mc_forward_pass_{i}_entropy.csv")
+            helper.write_rows(mean_variance, root_dir + f"variance/mc_forward_pass_{i}_variance.csv")
+            helper.write_rows(costs_mean, root_dir + f"costs/mc_forward_pass_{i}_costs.csv")
 
 
 
 
     mean_entropy = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
     mean_variance = np.mean(drop_predictions, axis=0)  # shape (n_samples, n_classes)
+    costs_mean = np.mean(costs, axis=0)
     temp = np.delete(drop_predictions, n_classes - 1, 2)
     variance = np.var(temp, axis=0)  # shape (n_samples, n_classes)
 
@@ -275,10 +290,15 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
         for c in range(0, len(preds)):
             preds[c] = '{:.17f}'.format(preds[c])
 
-    return mean_entropy, mean_variance, costs
+    for cost in costs_mean:
+
+        for c in range(0, len(cost)):
+            cost[c] = '{:.17f}'.format(cost[c])
+
+    return mean_entropy, mean_variance, costs_mean
 
 
-def predict(test_set, root_dir, network, num_samples, n_classes=8, mc_dropout=False, forward_passes=100, softmax=False):
+def predict(test_set, root_dir, network, num_samples, device, n_classes=8, mc_dropout=False, BBB=False, forward_passes=100, softmax=False):
 
     print("Predicting on Test set")
 
@@ -286,8 +306,12 @@ def predict(test_set, root_dir, network, num_samples, n_classes=8, mc_dropout=Fa
     network.eval()
 
     if mc_dropout:
-        predictions_e, predictions_v, costs = monte_carlo(test_set, forward_passes, network, num_samples, n_classes, root_dir)
+        predictions_e, predictions_v, costs = monte_carlo(test_set, forward_passes, network, num_samples, n_classes, root_dir, device, BBB)
         return predictions_e, predictions_v, costs
     elif softmax:
-        predictions, costs = softmax_pred(test_set, network, n_classes, num_samples)
+        predictions, costs = softmax_pred(test_set, network, n_classes, num_samples, device)
         return predictions, costs
+    elif BBB:
+        predictions_e, predictions_v, costs = monte_carlo(test_set, forward_passes, network, num_samples, n_classes,
+                                                          root_dir, device, BBB)
+        return predictions_e, predictions_v, costs
