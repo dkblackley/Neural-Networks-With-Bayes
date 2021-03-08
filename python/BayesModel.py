@@ -66,6 +66,7 @@ class BayesianLayer(nn.Module):
         self.weight_prior = ScaleMixtureGaussian(PI, SIGMA_1, SIGMA_2)
         self.bias_prior = ScaleMixtureGaussian(PI, SIGMA_1, SIGMA_2)
         self.log_prior = 0
+
         self.log_variational_posterior = 0
 
     def forward(self, input, sample=False, calc_log_probs=False):

@@ -34,8 +34,10 @@ class Classifier(nn.Module):
 
         if BBB:
             self.hidden_layer = BayesModel.BayesianLayer(512, 512)
+            self.hidden_layer2 = BayesModel.BayesianLayer(512, 512)
         else:
             self.hidden_layer = nn.Linear(512, 512)
+            self.hidden_layer = nn.Linear2(512, 512)
         self.output_layer = nn.Linear(512, output_size)
 
     def forward(self, input, dropout=False, sample=False):
@@ -67,9 +69,11 @@ class Classifier(nn.Module):
         elif self.BBB and self.training:
             return output
 
+
         elif self.BBB:
-            #output = self.hidden_layer(output)
-            return output, self.output_layer(output)
+            #output = self.hidden_layer(output, sample=True)
+            #output = self.hidden_layer2(output, sample=True)
+            return output
 
         elif self.training:
             output = self.hidden_layer(output)
@@ -81,18 +85,19 @@ class Classifier(nn.Module):
         output = self.output_layer(output)
         return output
 
-    def bayesian_sample(self, input, sample):
-        output = self.hidden_layer(input, sample=sample)
+    def bayesian_sample(self, input, sample, log_prob):
+        output = self.hidden_layer(input, sample=sample, calc_log_probs=log_prob)
+        output = self.hidden_layer2(output, sample=sample, calc_log_probs=log_prob)
         output = self.output_layer(output)
 
         return output
 
     #Methods for BBB
     def log_prior(self):
-        return self.hidden_layer.log_prior
+        return self.hidden_layer.log_prior + self.hidden_layer2.log_prior
 
     def log_variational_posterior(self):
-        return self.hidden_layer.log_variational_posterior
+        return self.hidden_layer.log_variational_posterior + self.hidden_layer2.log_variational_posterior
 
     def sample_elbo(self, input, target, batch_size, n_classes, num_batches, class_weights, samples=10):
 
@@ -101,16 +106,26 @@ class Classifier(nn.Module):
         log_variational_posteriors = torch.zeros(samples)
 
         for i in range(samples):
-            outputs[i] = self.bayesian_sample(input, sample=True)
+            outputs[i] = self.bayesian_sample(input, True, True)
             log_priors[i] = self.log_prior()
             log_variational_posteriors[i] = self.log_variational_posterior()
 
         log_prior = log_priors.mean()
         log_variational_posterior = log_variational_posteriors.mean()
         #negative_log_likelihood = TF.nll_loss(outputs.mean(0), target, reduction='sum')
-        #negative_log_likelihood = TF.nll_loss(outputs.mean(0), target, class_weights, reduction='sum')
-        negative_log_likelihood = TF.cross_entropy(outputs.mean(0), target, weight=class_weights, reduction='mean')
-        loss = (log_variational_posterior - log_prior) / num_batches + negative_log_likelihood
-        return loss, outputs.mean(0)
+        #negative_log_likelihood = TF.nll_loss(outputs.mean(0), target, weight=class_weights, reduction='sum')
+
+        negative_log_likelihood = TF.cross_entropy(outputs.mean(0), target, weight=class_weights, reduction='sum')
+
+        KL_divergence = (log_variational_posterior - log_prior)
+        loss = KL_divergence / num_batches + negative_log_likelihood
+
+
+        #loss = loss/batch_size
+
+        if torch.isnan(loss):
+            print("nan loss detected")
+
+        return loss, negative_log_likelihood, outputs.mean(0)
 
 

@@ -18,7 +18,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
-EPOCHS = 27
+EPOCHS = 25
 UNKNOWN_CLASS = False
 DEBUG = False  # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
@@ -223,12 +223,32 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
             optim.zero_grad()
 
             if BBB:
-                outputs = network(image_batch)
-                loss, outputs = network.sample_elbo(outputs, label_batch, outputs.size()[0], 8, len(train_set), class_weights)
+
+                #network.freeze_BbB()
+                efficientNet_output = network(image_batch)
+                #network.unfreeze_all()
+
+                #network.freeze_efficientNet()
+                BbB_loss, cross_entropy, outputs = network.sample_elbo(efficientNet_output, label_batch, efficientNet_output.size()[0], 8,
+                                                                       len(train_set), class_weights)
+                #network.unfreeze_all()
+
+                efficientNet_loss = loss_function(outputs, label_batch)
+
+                loss = BbB_loss + efficientNet_loss
+
+                loss.backward()
+                optim.step()
+
+                # For easy to read graphing purposes
+                #loss = cross_entropy
 
             else:
                 outputs = network(image_batch, dropout=True)
                 loss = loss_function(outputs, label_batch)
+
+                loss.backward()
+                optim.step()
 
             """if COST_MATRIX:
                 loss_values = loss_function(outputs, label_batch)
@@ -247,9 +267,6 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
 
                 loss = temp_loss/(weighting)
                 else:"""
-
-            loss.backward()
-            optim.step()
 
             percentage = (i_batch / len(train_set)) * 100  # Used for Debugging
 
@@ -270,6 +287,10 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
                     incorrect_count[label] += 1
                     incorrect += 1
                 total += 1
+
+            """if percentage % 10 >= 9.85 and verbose:
+                print("\n")
+                print(loss)"""
 
             if percentage >= 1 and DEBUG:
                 print(loss)
@@ -355,8 +376,18 @@ def test(testing_set, verbose=False):
             with torch.no_grad():
 
                 if BBB:
-                    outputs_bayes, outputs = network(image_batch)
-                    loss, outputs = network.sample_elbo(outputs_bayes, label_batch, outputs.size()[0], 8, len(train_set), class_weights)
+                    #outputs_bayes, outputs = network(image_batch)
+                    #loss, cross_entropy, outputs = network.sample_elbo(outputs_bayes, label_batch, outputs.size()[0], 8, len(train_set), class_weights)
+
+                    #loss = cross_entropy
+
+                    efficientNet_output = network(image_batch)
+                    BbB_loss, cross_entropy, outputs = network.sample_elbo(efficientNet_output, label_batch,
+                                                                           efficientNet_output.size()[0], 8,
+                                                                           len(train_set), class_weights)
+
+                    efficientNet_loss = loss_function(outputs, label_batch)
+                    loss = BbB_loss + efficientNet_loss
 
                 else:
                     outputs = network(image_batch, dropout=True)
@@ -572,7 +603,7 @@ model_name = "saved_model/"
 
 #data_plot.plot_confusion(helper.get_cost_matrix(), model_name, "My cost matrix")
 
-#train_net(model_name)
+train_net(model_name)
 #helper.plot_samples(train_data, data_plot)
 
 network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(model_name, 8)
