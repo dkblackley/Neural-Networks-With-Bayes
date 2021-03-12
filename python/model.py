@@ -58,13 +58,16 @@ class Classifier(nn.Module):
             #self.hidden_layer2 = nn.Linear(512, 512)
         self.output_layer = nn.Linear(size_1, output_size)
 
-    def forward(self, input, labels=None, sample=False, dropout=False):
+    def forward(self, input, labels=None, sample=False, drop_rate=None, dropout=False):
         """
         Method for handling a forward pass though the network, applies dropout using nn.functional
         :param input: input batch to be processed
         :param dropout: bool for whether or not dropout should be applied
         :return: processed output
         """
+
+        if drop_rate is None:
+            drop_rate = self.drop_rate
 
         output = self.model.extract_features(input)
         output = self.pool(output)

@@ -56,7 +56,7 @@ def change_to_device(network, optim, device):
 def load_net(PATH, image_size, output_size, device, class_weights):
     net = model.Classifier(image_size, output_size, device, class_weights)
     optim = optimizer.Adam(net.parameters(), lr=0.001)
-    states = torch.load(PATH)
+    states = torch.load(PATH, map_location=device)
 
     try:
         net.load_state_dict(states['network'])

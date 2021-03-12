@@ -55,7 +55,7 @@ def monte_carlo_ISIC(data_set, data_loader, forward_passes, network):
                 image_batch = sample_batch['image']
 
                 with torch.no_grad():
-                    outputs = soft_max(network(image_batch, dropout=True))
+                    outputs = soft_max(network(image_batch, dropout=True, drop_rate=0.25))
 
                 for output in outputs:
                     predictions = np.vstack((predictions, output.cpu().numpy()))
@@ -194,7 +194,7 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
                 if BBB:
                     outputs = soft_max(network(image_batch, labels=label_batch))
                 else:
-                    outputs = soft_max(network(image_batch, dropout=True))
+                    outputs = soft_max(network(image_batch, dropout=True, drop_rate=0.25))
             for output in outputs:
                 answers = output.cpu().numpy()
 

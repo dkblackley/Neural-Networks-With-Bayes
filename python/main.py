@@ -7,7 +7,7 @@ calling other classes for plotting results of the network
 EPOCHS = 100
 UNKNOWN_CLASS = False
 DEBUG = False #Toggle this to only run for 1% of the training data
-ENABLE_GPU = True  # Toggle this to enable or disable GPU
+ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
 MC_DROPOUT = False
@@ -553,7 +553,8 @@ def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_ac
 
 
 def print_metrics(SAVE_DIR):
-
+    #data_plot.plot_each_mc_cost(predictions_softmax, SAVE_DIR, "Costs by Forward Pass", "entropy")
+    #data_plot.plot_each_mc_pass(SAVE_DIR, predictions_softmax, test_indexes, test_data, SAVE_DIR, "Accuracies by Forward Pass", "entropy", cost_matrix=False)
 
     data_plot.plot_true_cost_coverage_by_class([costs_mc, costs_sr], SAVE_DIR,
                                                "Average Test cost by Classes using LEC with Reject option", uncertainty=True)
@@ -578,20 +579,18 @@ def print_metrics(SAVE_DIR):
 
 
 
-    data_plot.plot_true_cost_coverage(predictions_mc, predictions_softmax, SAVE_DIR,
+    data_plot.plot_true_cost_coverage([predictions_mc, predictions_softmax], SAVE_DIR,
                                       "Average Test cost using Raw Probabilities with Flattened Matrix", costs=False, flatten=True, uncertainty=True)
-    data_plot.plot_true_cost_coverage(predictions_mc, predictions_softmax, SAVE_DIR,
+    data_plot.plot_true_cost_coverage([predictions_mc, predictions_softmax], SAVE_DIR,
                                       "Average Test cost using Raw Probabilities", costs=False)
-    data_plot.plot_true_cost_coverage(costs_mc, costs_sr, SAVE_DIR, "Average Test cost using LEC")
+    data_plot.plot_true_cost_coverage([costs_mc, costs_sr], SAVE_DIR, "Average Test cost using LEC")
 
-    data_plot.plot_cost_coverage([costs_mc, costs_sr], SAVE_DIR, "Coverage by Lowest Expected cost", load=False)
+    data_plot.plot_cost_coverage(costs_mc, costs_sr, SAVE_DIR, "Coverage by Lowest Expected cost", load=False)
 
     data_plot.count_sampels_in_intervals(predictions_mc, SAVE_DIR, "Number of Samples in each Interval MC Dropout", 5)
     data_plot.count_sampels_in_intervals(predictions_mc, SAVE_DIR, "Number of Samples in each Interval MC Dropout (Without probabilites below 0.2)", 5, skip_first=True)
     data_plot.count_sampels_in_intervals(predictions_softmax, SAVE_DIR, "Number of Samples in each Interval Softmax", 5)
     data_plot.count_sampels_in_intervals(predictions_softmax, SAVE_DIR, "Number of Samples in each Interval Softmax (Without probabilites below 0.2)", 5, skip_first=True)
-    data_plot.plot_each_mc_cost(predictions_softmax, SAVE_DIR, "Costs by Forward Pass", "entropy")
-
 
 
     data_plot.plot_calibration(predictions_mc, "MC Dropout Reliability Diagram", SAVE_DIR, 5)
@@ -674,7 +673,7 @@ def print_metrics(SAVE_DIR):
 if not os.path.exists("saved_models/"):
     os.mkdir("saved_models/")
 
-for i in range(0, 10):
+for i in range(0, 0):
     
     network = model.Classifier(image_size, 8, class_weights, device, dropout=0.5, BBB=BBB)
     network.to(device)
@@ -710,7 +709,7 @@ for i in range(0, 10):
         helper.write_rows(predictions_BBB_var, SAVE_DIR + "BBB_variance_predictions.csv")
         helper.write_rows(costs_BBB, SAVE_DIR + "BBB_costs.csv")
 
-        costs_BBB = helper.read_rows(SAVE_DIR + "costs/BBB_forward_pass_1_costs.csv")
+        costs_BBB = helper.read_rows(SAVE_DIR + "BBB_costs.csv")
         predictions_BBB = helper.read_rows(SAVE_DIR + "BBB_variance_predictions.csv")
         predictions_BBB = helper.read_rows(SAVE_DIR + "BBB_entropy_predictions.csv")
 
@@ -730,7 +729,7 @@ for i in range(0, 10):
         predictions_softmax = helper.read_rows(SAVE_DIR + "softmax_predictions.csv")
         predictions_mc = helper.read_rows(SAVE_DIR + "mc_entropy_predictions.csv")
 
-        costs_mc = helper.read_rows(SAVE_DIR + "costs/mc_forward_pass_1_costs.csv")
+        costs_mc = helper.read_rows(SAVE_DIR + "mc_costs.csv")
         costs_sr = helper.read_rows(SAVE_DIR + "softmax_costs.csv")
         #predictions_mc = helper.read_rows(SAVE_DIR + "mc_entropy_predictions.csv")
         #predictions_mc = helper.read_rows(SAVE_DIR + "mc_predictions.csv")
@@ -741,6 +740,31 @@ for i in range(0, 10):
         costs_mc = helper.string_to_float(costs_mc)
         costs_sr = helper.string_to_float(costs_sr)
 
-    #print_metrics(SAVE_DIR)
+SAVE_DIR = f"saved_models/Classifier_1/best_model/"
+
+if not os.path.exists(SAVE_DIR + "/naturallog/"):
+    os.mkdir(SAVE_DIR + "/naturallog/")
+    os.mkdir(SAVE_DIR + "/variance/")
+    os.mkdir(SAVE_DIR + "/costs/")
+
+network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR, 8)
+
+#predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, SAVE_DIR, network, test_size, device, mc_dropout=True, forward_passes=FORWARD_PASSES)
+
+predictions_softmax = helper.read_rows(SAVE_DIR + "softmax_predictions.csv")
+predictions_mc = helper.read_rows(SAVE_DIR + "mc_entropy_predictions.csv")
+
+costs_mc = helper.read_rows(SAVE_DIR + "mc_costs.csv")
+costs_sr = helper.read_rows(SAVE_DIR + "softmax_costs.csv")
+# predictions_mc = helper.read_rows(SAVE_DIR + "mc_entropy_predictions.csv")
+# predictions_mc = helper.read_rows(SAVE_DIR + "mc_predictions.csv")
+
+predictions_softmax = helper.string_to_float(predictions_softmax)
+predictions_mc = helper.string_to_float(predictions_mc)
+
+costs_mc = helper.string_to_float(costs_mc)
+costs_sr = helper.string_to_float(costs_sr)
+
+print_metrics(SAVE_DIR)
 
 
