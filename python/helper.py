@@ -63,7 +63,7 @@ def load_net(PATH, image_size, output_size, device, class_weights):
         optim.load_state_dict(states['optimizer'])
     except Exception as e:
         net = model.Classifier(image_size, output_size, device, class_weights, BBB=True)
-        optim = optimizer.Adam(net.parameters(), lr=0.001)
+        optim = optimizer.Adam(net.parameters(), lr=0.001, weight_decay=0.001)
 
         net.load_state_dict(states['network'])
         optim.load_state_dict(states['optimizer'])

@@ -133,15 +133,6 @@ def softmax_pred(data_set, network, n_classes, n_samples, device):
         for output in outputs:
             predictions = np.vstack((predictions, output.cpu().numpy()))
 
-    """    epsilon = sys.float_info.min
-    entropies = -np.sum(predictions*np.log(predictions + epsilon), axis=-1)
-
-    predictions = predictions.tolist()
-    entropies = entropies.tolist()
-
-    for i in range(0, len(entropies)):
-        entropies[i] = (entropies[i] - min(entropies)) / (max(entropies) - min(entropies))"""
-
     predictions = predictions.tolist()
 
     for pred in predictions:
@@ -175,26 +166,30 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
     soft_max = nn.Softmax(dim=1)
     drop_predictions = np.empty((0, n_samples, n_classes))
     costs = np.empty((0, n_samples, n_classes))
+    efficient_net_outputs = []
 
     network.eval()
 
+    for i_batch, sample_batch in enumerate(data_set):
+        image_batch = sample_batch['image'].to(device)
+        with torch.no_grad():
+            efficient_net_output = network.extract_efficientNet(image_batch)
+        efficient_net_outputs.append(efficient_net_output)
 
     for i in tqdm(range(0, forward_passes)):
 
         predictions = np.empty((0, n_classes))
-        #current_costs = np.empty((0, n_classes - 1))
         current_costs = np.empty((0, n_classes))
 
 
-        for i_batch, sample_batch in enumerate(data_set):
-            image_batch = sample_batch['image'].to(device)
-            label_batch = sample_batch['label'].to(device)
+        for c in range(0, len(efficient_net_outputs)):
+            #image_batch = sample_batch['image'].to(device)
 
             with torch.no_grad():
                 if BBB:
-                    outputs = soft_max(network(image_batch, labels=label_batch))
+                    outputs = soft_max(network.pass_through_layers(efficient_net_outputs[c]))
                 else:
-                    outputs = soft_max(network(image_batch, dropout=True, drop_rate=0.25))
+                    outputs = soft_max(network.pass_through_layers(efficient_net_outputs[c], dropout=True))
             for output in outputs:
                 answers = output.cpu().numpy()
 

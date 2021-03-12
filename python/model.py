@@ -19,7 +19,7 @@ class Classifier(nn.Module):
     """
     Class that holds and runs the efficientnet CNN
     """
-    def __init__(self, image_size, output_size, class_weights, device, dropout=0.5, BBB=False):
+    def __init__(self, image_size, output_size, class_weights, device, hidden_size=512, dropout=0.5, BBB=False):
         """
         init function sets the type of efficientnet and any extra layers
         :param dropout: rate for dropout
@@ -35,28 +35,20 @@ class Classifier(nn.Module):
         #self.relu = torch.nn.LeakyReLU()
         self.relu = torch.nn.ReLU()
 
-        
-        size_1 = 256
-        #size_2 = 512
-
         with torch.no_grad():
 
             temp_input = torch.zeros(1, 3, image_size, image_size)
             encoder_size = self.model.extract_features(temp_input).shape[1]
 
         # Initialises the classification head for generating predictions.
-        self.efficient_net_output = nn.Linear(encoder_size, size_1)
-        
-        self.efficient_net_batch = nn.BatchNorm1d(num_features=size_1)
-        self.bn1 = nn.BatchNorm1d(num_features=size_1)
-        
         if BBB:
-            self.hidden_layer = BayesModel.BayesianLayer(size_1, size_1, device)
-            #self.hidden_layer2 = BayesModel.BayesianLayer(512, 512, device)
+            self.hidden_layer = BayesModel.BayesianLayer(encoder_size, hidden_size, device)
+
         else:
-            self.hidden_layer = nn.Linear(size_1, size_1)
-            #self.hidden_layer2 = nn.Linear(512, 512)
-        self.output_layer = nn.Linear(size_1, output_size)
+            self.hidden_layer = nn.Linear(encoder_size, hidden_size)
+
+        self.bn1 = nn.BatchNorm1d(num_features=hidden_size)
+        self.output_layer = nn.Linear(hidden_size, output_size)
 
     def forward(self, input, labels=None, sample=False, drop_rate=None, dropout=False):
         """
@@ -73,41 +65,62 @@ class Classifier(nn.Module):
         output = self.pool(output)
         output = output.view(output.shape[0], -1)
 
-        if self.training:
-            #output = TF.dropout(output, self.drop_rate)
-            output = self.relu(self.efficient_net_batch(self.efficient_net_output(output)))
-            output = TF.dropout(output, self.drop_rate)
-        else:
-            output = self.relu(self.efficient_net_batch(self.efficient_net_output(output)))
-
-
-        if dropout:
-            output = self.relu(self.bn1(self.hidden_layer(output)))
-            output = TF.dropout(output, self.drop_rate)
-            #output = self.relu(self.hidden_layer2(output))
-            #output = TF.dropout(output, self.drop_rate)
-
-        elif self.BBB:
-
+        if self.BBB:
+            # Don't bother calculating KL Divergence if we're not training
             if self.training or sample:
                 output = self.sample_elbo(output, labels)
                 return output
             else:
                 output = self.relu(self.bn1(self.hidden_layer(output)))
-                #output = self.relu(self.hidden_layer2(output))
+                return self.output_layer(output)
 
-        else:
-            output = self.relu(self.bn1(self.hidden_layer(output)))
-            #output = self.relu(self.hidden_layer2(output))
+        elif dropout:
+            output = TF.dropout(output, drop_rate)
+
+        output = self.relu(self.bn1(self.hidden_layer(output)))
+
+        if dropout:
+            output = TF.dropout(output, drop_rate)
 
         output = self.output_layer(output)
         return output
 
     def bayesian_sample(self, input):
-        output = self.relu(self.hidden_layer(input))
-        #output = self.relu(self.hidden_layer2(output))
+        output = self.relu(self.bn1(self.hidden_layer(input)))
         output = self.output_layer(output)
 
+        return output
+
+    def extract_efficientNet(self, input):
+        output = self.model.extract_features(input)
+        output = self.pool(output)
+        output = output.view(output.shape[0], -1)
+
+        return output
+
+    def pass_through_layers(self, input, labels=None, sample=False, drop_rate=None, dropout=False):
+
+        if drop_rate is None:
+            drop_rate = self.drop_rate
+
+        if self.BBB:
+            # Don't bother calculating KL Divergence if we're not training
+            if self.training or sample:
+                output = self.sample_elbo(input, labels)
+                return output
+            else:
+                output = self.relu(self.bn1(self.hidden_layer(input)))
+                return self.output_layer(output)
+
+        elif dropout:
+            input = TF.dropout(input, drop_rate)
+
+        output = self.relu(self.bn1(self.hidden_layer(input)))
+
+        if dropout:
+            output = TF.dropout(output, drop_rate)
+
+        output = self.output_layer(output)
         return output
 
     #Methods for BBB
@@ -117,7 +130,7 @@ class Classifier(nn.Module):
     def log_variational_posterior(self):
         return self.hidden_layer.log_variational_posterior# + self.hidden_layer2.log_variational_posterior
 
-    def sample_elbo(self, input, target, samples=10, n_classes=8):
+    def sample_elbo(self, input, target, samples=1, n_classes=8):
         
         num_batches = 555
         batch_size = input.size()[0]
