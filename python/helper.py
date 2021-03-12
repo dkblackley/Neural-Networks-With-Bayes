@@ -72,7 +72,7 @@ def load_net(PATH, image_size, output_size, device, class_weights):
     
     
     
-    return change_to_device(network, optim, device)
+    return change_to_device(net, optim, device)
 
 def get_mean_and_std(data_set):
     """

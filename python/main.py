@@ -145,6 +145,16 @@ data_plot = data_plotting.DataPlotting(UNKNOWN_CLASS, test_data, test_indexes)
 
 weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
 
+summed = sum(weights)
+new_weights = 164 / torch.Tensor(weights)
+
+"""new_weights = [weight/sum(weights) for weight in weights]
+print(new_weights)"""
+
+#new_weights = [1.0 / weight for weight in weights]
+#new_weights = new_weights / sum(new_weights)
+print(new_weights)
+
 new_weights = []
 index = 0
 for weight in weights:
@@ -154,16 +164,20 @@ for weight in weights:
         new_weights.append(sum(weights)/(8 * weight))
     index = index + 1
 
+new_weights = torch.Tensor(new_weights)
+print(new_weights)
 #weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
 
 #new_weights = helper.apply_cost_matrix()
 
-class_weights = torch.Tensor(new_weights).to(device)
+class_weights = new_weights.to(device)
 if COST_MATRIX:
     loss_function = nn.CrossEntropyLoss(weight=class_weights, reduction='none')
 else:
     loss_function = nn.CrossEntropyLoss(weight=class_weights)
 
+
+    
 if UNKNOWN_CLASS:
     network = model.Classifier(image_size, 7, class_weights, device, dropout=0.5, BBB=BBB)
     network.to(device)
@@ -173,12 +187,14 @@ else:
     network.to(device)
     weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
 
-optim = optimizer.Adam(network.parameters(), lr=0.001)
+optim = optimizer.Adam(network.parameters(), lr=0.001, weight_decay=0.001)
 
 #weights = list(helper.count_classes(train_set, BATCH_SIZE).values())
 
 
-
+"""output_hook = model.OutputHook()
+network.relu.register_forward_hook(output_hook)
+activation_penalty = 0.001"""
 
 
 def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy, verbose=False):
@@ -236,15 +252,12 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
                 efficientNet_loss = loss_function(outputs, label_batch)
 
                 loss = network.BBB_loss + efficientNet_loss
-                loss.backward()
-                optim.step()
 
             else:
                 outputs = network(image_batch, dropout=True)
                 loss = loss_function(outputs, label_batch)
 
-                loss.backward()
-                optim.step()
+                
 
             """if COST_MATRIX:
                 loss_values = loss_function(outputs, label_batch)
@@ -263,7 +276,16 @@ def train(current_epoch, val_losses, train_losses, val_accuracy, train_accuracy,
 
                 loss = temp_loss/(weighting)
                 else:"""
-
+            
+            """activation_cost = 0
+            for output in output_hook:
+                activation_cost += torch.norm(output, 1)
+            activation_cost *= activation_penalty
+            
+            loss += activation_cost"""
+            
+            loss.backward()
+            optim.step()
             percentage = (i_batch / len(train_set)) * 100  # Used for Debugging
 
             losses.append(loss.item())
@@ -400,7 +422,14 @@ def test(testing_set, verbose=False):
                     loss = temp_loss / (weighting)
                 else:
                     loss = loss_function(outputs, label_batch)"""
-
+            
+            """activation_cost = 0
+            for output in output_hook:
+                activation_cost += torch.norm(output, 1)
+            activation_cost *= activation_penalty
+            
+            loss += activation_cost"""
+            
             losses.append(loss.item())
 
             index = 0
@@ -469,7 +498,7 @@ def load_net(root_dir, output_size):
     train_losses = helper.read_csv(root_dir + "train_losses.csv")
     val_accuracies = helper.read_csv(root_dir + "val_accuracies.csv")
     train_accuracies = helper.read_csv(root_dir + "train_accuracies.csv")
-    network, optim = helper.load_net(root_dir + "model_parameters", image_size, output_size, class_weights)
+    network, optim = helper.load_net(root_dir + "model_parameters", image_size, output_size, device, class_weights)
 
     network = network.to(device)
 
@@ -655,6 +684,7 @@ for i in range(0, 10):
         SAVE_DIR = f"saved_models/BBB_Classifier_{i}/"
     else:
         SAVE_DIR = f"saved_models/Classifier_{i}/"
+    
 
     train_net(SAVE_DIR, 
               starting_epoch=0,
@@ -663,7 +693,7 @@ for i in range(0, 10):
               val_accuracies=[],
               train_accuracies=[])
 
-    SAVE_DIR = SAVE_DIR + "best_model/"
+    SAVE_DIR = SAVE_DIR + "best_loss/"
 
     network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR, 8)
 

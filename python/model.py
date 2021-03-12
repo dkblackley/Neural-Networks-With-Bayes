@@ -8,6 +8,13 @@ from efficientnet_pytorch import EfficientNet
 import BayesModel
 
 
+class OutputHook(list):
+    """ Hook to capture module outputs.
+    """
+    def __call__(self, module, input, output):
+        self.append(output)
+        
+
 class Classifier(nn.Module):
     """
     Class that holds and runs the efficientnet CNN
@@ -25,6 +32,12 @@ class Classifier(nn.Module):
         self.BBB = BBB
         self.class_weights = class_weights
         self.device = device
+        #self.relu = torch.nn.LeakyReLU()
+        self.relu = torch.nn.ReLU()
+
+        
+        size_1 = 256
+        #size_2 = 512
 
         with torch.no_grad():
 
@@ -32,15 +45,18 @@ class Classifier(nn.Module):
             encoder_size = self.model.extract_features(temp_input).shape[1]
 
         # Initialises the classification head for generating predictions.
-        self.efficient_net_output = nn.Linear(encoder_size, 512)
-
+        self.efficient_net_output = nn.Linear(encoder_size, size_1)
+        
+        self.efficient_net_batch = nn.BatchNorm1d(num_features=size_1)
+        self.bn1 = nn.BatchNorm1d(num_features=size_1)
+        
         if BBB:
-            self.hidden_layer = BayesModel.BayesianLayer(512, 512, device)
-            self.hidden_layer2 = BayesModel.BayesianLayer(512, 512, device)
+            self.hidden_layer = BayesModel.BayesianLayer(size_1, size_1, device)
+            #self.hidden_layer2 = BayesModel.BayesianLayer(512, 512, device)
         else:
-            self.hidden_layer = nn.Linear(512, 512)
-            self.hidden_layer2 = nn.Linear(512, 512)
-        self.output_layer = nn.Linear(512, output_size)
+            self.hidden_layer = nn.Linear(size_1, size_1)
+            #self.hidden_layer2 = nn.Linear(512, 512)
+        self.output_layer = nn.Linear(size_1, output_size)
 
     def forward(self, input, labels=None, sample=False, dropout=False):
         """
@@ -55,18 +71,18 @@ class Classifier(nn.Module):
         output = output.view(output.shape[0], -1)
 
         if self.training:
-            output = TF.dropout(output, self.drop_rate)
-            output = TF.relu(self.efficient_net_output(output))
+            #output = TF.dropout(output, self.drop_rate)
+            output = self.relu(self.efficient_net_batch(self.efficient_net_output(output)))
             output = TF.dropout(output, self.drop_rate)
         else:
-            output = self.efficient_net_output(output)
+            output = self.relu(self.efficient_net_batch(self.efficient_net_output(output)))
 
 
         if dropout:
-            output = TF.relu(self.hidden_layer(output))
+            output = self.relu(self.bn1(self.hidden_layer(output)))
             output = TF.dropout(output, self.drop_rate)
-            output = TF.relu(self.hidden_layer2(output))
-            output = TF.dropout(output, self.drop_rate)
+            #output = self.relu(self.hidden_layer2(output))
+            #output = TF.dropout(output, self.drop_rate)
 
         elif self.BBB:
 
@@ -74,29 +90,29 @@ class Classifier(nn.Module):
                 output = self.sample_elbo(output, labels)
                 return output
             else:
-                output = TF.relu(self.hidden_layer(output))
-                output = TF.relu(self.hidden_layer2(output))
+                output = self.relu(self.bn1(self.hidden_layer(output)))
+                #output = self.relu(self.hidden_layer2(output))
 
         else:
-            output = TF.relu(self.hidden_layer(output))
-            output = TF.relu(self.hidden_layer2(output))
+            output = self.relu(self.bn1(self.hidden_layer(output)))
+            #output = self.relu(self.hidden_layer2(output))
 
         output = self.output_layer(output)
         return output
 
     def bayesian_sample(self, input):
-        output = TF.relu(self.hidden_layer(input))
-        output = TF.relu(self.hidden_layer2(output))
+        output = self.relu(self.hidden_layer(input))
+        #output = self.relu(self.hidden_layer2(output))
         output = self.output_layer(output)
 
         return output
 
     #Methods for BBB
     def log_prior(self):
-        return self.hidden_layer.log_prior + self.hidden_layer2.log_prior
+        return self.hidden_layer.log_prior# + self.hidden_layer2.log_prior
 
     def log_variational_posterior(self):
-        return self.hidden_layer.log_variational_posterior + self.hidden_layer2.log_variational_posterior
+        return self.hidden_layer.log_variational_posterior# + self.hidden_layer2.log_variational_posterior
 
     def sample_elbo(self, input, target, samples=10, n_classes=8):
         
