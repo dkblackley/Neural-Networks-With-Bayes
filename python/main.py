@@ -8,7 +8,7 @@ EPOCHS = 60
 UNKNOWN_CLASS = False
 DEBUG = False #Toggle this to only run for 1% of the training data
 ENABLE_GPU = True  # Toggle this to enable or disable GPU
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 SOFTMAX = True
 MC_DROPOUT = False
 TRAIN_MC_DROPOUT = True
@@ -24,7 +24,7 @@ if TRAIN_MC_DROPOUT and BBB:
 import torch
 import torch.optim as optimizer
 from torchvision import transforms
-from torch.utils.data import random_split, SubsetRandomSampler, Subset
+from torch.utils.data import random_split, SubsetRandomSampler, Subset, WeightedRandomSampler
 import numpy as np
 import data_loading
 import data_plotting
@@ -50,8 +50,20 @@ else:
     device = torch.device("cpu")
 
 
+weights = [3620, 10297, 2661, 688, 2109, 187, 200, 502]
+new_weights = []
+k =1.25
+
+for weight in weights:
+    new_weights.append(((sum(weights))/weight)**k)
+
+new_weights = torch.Tensor(new_weights)
+print(new_weights)
+class_weights = new_weights.to(device)
 
 composed_train = transforms.Compose([
+                                transforms.Resize(image_size*2)
+                                transforms.CenterCrop(image_size*1.25)
                                 transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0)),
                                 transforms.ColorJitter(brightness=0.2, contrast=0.2),
                                 transforms.RandomVerticalFlip(),
@@ -95,7 +107,7 @@ def get_data_sets(plot=False):
         split_test = int(np.floor(0.75 * (len(indices) - split_train)))
 
         np.random.seed(1337)
-        np.random.shuffle(indices)
+        #np.random.shuffle(indices)
 
         temp_idx, train_idx = indices[split_train:], indices[:split_train]
         valid_idx, test_idx = temp_idx[split_test:], temp_idx[:split_test]
@@ -105,6 +117,7 @@ def get_data_sets(plot=False):
                 test_idx.append(i)
 
         np.random.shuffle(test_idx)
+        
 
     else:
         indices = list(range(len(train_data)))
@@ -112,18 +125,24 @@ def get_data_sets(plot=False):
         split_test = int(np.floor(0.75 * (len(indices) - split_train)))
 
         np.random.seed(1337)
-        np.random.shuffle(indices)
+        #np.random.shuffle(indices)
 
         temp_idx, train_idx = indices[split_train:], indices[:split_train]
         valid_idx, test_idx = temp_idx[split_test:], temp_idx[:split_test]
-
-    train_sampler = SubsetRandomSampler(train_idx)
+    
+    weighted_train_idx = []
+    for c in range(0, len(train_idx)):
+        label = train_data.get_label(train_idx[c])
+        weighted_idx = new_weights[label]
+        weighted_train_idx.append(weighted_idx)
+    
+    weighted_train_sampler = WeightedRandomSampler(weights=weighted_train_idx, num_samples=len(weighted_train_idx), replacement=True)
     valid_sampler = SubsetRandomSampler(valid_idx)
     # Don't shuffle the testing set for MC_DROPOUT
     testing_data = Subset(test_data, test_idx)
     #test_sampler = SequentialSampler(test_temp)
 
-    training_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=train_sampler)
+    training_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=weighted_train_sampler, shuffle=False)
     valid_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=valid_sampler)
     testing_set = torch.utils.data.DataLoader(testing_data, batch_size=BATCH_SIZE, shuffle=False)
 
@@ -142,20 +161,12 @@ train_set, val_set, test_set, test_size, train_size, val_size, test_indexes = ge
 
 data_plot = data_plotting.DataPlotting(UNKNOWN_CLASS, test_data, test_indexes)
 
-#helper.count_classes(train_set, BATCH_SIZE)
-#helper.count_classes(val_set, BATCH_SIZE)
-#helper.count_classes(test_set, BATCH_SIZE)
+helper.count_classes(train_set, BATCH_SIZE)
+helper.count_classes(val_set, BATCH_SIZE)
+helper.count_classes(test_set, BATCH_SIZE)
 
 #weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
-weights = [3620, 10297, 2661, 688, 2109, 187, 200, 502]
-new_weights = []
-k =0.95
 
-for weight in weights:
-    new_weights.append(((sum(weights))/weight)**k)
-
-new_weights = torch.Tensor(new_weights)
-print(new_weights)
 
 """summed = sum(weights)
 new_weights = 164 / torch.Tensor(weights)
@@ -280,6 +291,13 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
                 activation_cost += torch.norm(output, 1)
             activation_cost *= activation_penalty
             loss += activation_cost"""
+            
+            L1_reg = torch.tensor(0., requires_grad=True)
+            for name, param in network.named_parameters():
+                if 'weight' in name:
+                    L1_reg = L1_reg + torch.norm(param, 1)
+
+                loss = loss + 0.0001 * L1_reg
             
             loss.backward()
             optim.step()
@@ -635,7 +653,7 @@ for i in range(0, 10):
     
     network = model.Classifier(image_size, 8, class_weights, device, dropout=0.6, BBB=BBB)
     network.to(device)
-    optim = optimizer.Adam(network.parameters(), lr=0.0001, weight_decay=0.00001)
+    optim = optimizer.Adam(network.parameters(), lr=0.0001)
     
     if BBB:
         ROOT_SAVE_DIR = f"saved_models/BBB_Classifier_{i}/"
