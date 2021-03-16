@@ -4,20 +4,22 @@ Deals with things like weight balancing, training and testing methods and
 calling other classes for plotting results of the network
 """
 
-EPOCHS = 2
+EPOCHS = 60
 UNKNOWN_CLASS = False
-DEBUG = True #Toggle this to only run for 1% of the training data
+DEBUG = False #Toggle this to only run for 1% of the training data
 ENABLE_GPU = True  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
 MC_DROPOUT = False
-TRAIN_MC_DROPOUT = False
+TRAIN_MC_DROPOUT = True
 COST_MATRIX = False
 TEST_COST_MATRIX = False
-FORWARD_PASSES = 2
-BBB = True
+FORWARD_PASSES = 100
+BBB = False
 SAVE_DIR = "saved_model"
 
+if TRAIN_MC_DROPOUT and BBB:
+    exit()
 
 import torch
 import torch.optim as optimizer
@@ -51,7 +53,7 @@ else:
 
 composed_train = transforms.Compose([
                                 transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0)),
-                                transforms.ColorJitter(brightness=0.2),
+                                transforms.ColorJitter(brightness=0.2, contrast=0.2),
                                 transforms.RandomVerticalFlip(),
                                 transforms.RandomHorizontalFlip(),
                                 transforms.RandomAffine(0, shear=0.01),
@@ -61,14 +63,14 @@ composed_train = transforms.Compose([
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
                                 # call helper.get_mean_and_std(data_set) to get mean and std
-                                transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
+                                #transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
                                ])
 
 composed_test = transforms.Compose([
                                 transforms.Resize((image_size, image_size)),
                                 transforms.ToTensor(),
                                 # call helper.get_mean_and_std(data_set) to get mean and std
-                                transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
+                                #transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
                                ])
 
 train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_train)
@@ -89,14 +91,14 @@ def get_data_sets(plot=False):
         indices = list(range(len(train_data)))
         indices = [x for x in indices if x not in scc_idx]
 
-        split_train = int(np.floor(0.7 * len(indices)))
-        split_val = int(np.floor(0.33 * split_train))
+        split_train = int(np.floor(0.8 * len(indices)))
+        split_test = int(np.floor(0.75 * (len(indices) - split_train)))
 
         np.random.seed(1337)
         np.random.shuffle(indices)
 
         temp_idx, train_idx = indices[split_train:], indices[:split_train]
-        valid_idx, test_idx = temp_idx[split_val:], temp_idx[:split_val]
+        valid_idx, test_idx = temp_idx[split_test:], temp_idx[:split_test]
 
         for i in scc_idx:
             if i not in test_idx:
@@ -106,14 +108,14 @@ def get_data_sets(plot=False):
 
     else:
         indices = list(range(len(train_data)))
-        split_train = int(np.floor(0.7 * len(train_data)))
-        split_val = int(np.floor(0.33 * split_train))
+        split_train = int(np.floor(0.8 * len(indices)))
+        split_test = int(np.floor(0.75 * (len(indices) - split_train)))
 
         np.random.seed(1337)
         np.random.shuffle(indices)
 
         temp_idx, train_idx = indices[split_train:], indices[:split_train]
-        valid_idx, test_idx = temp_idx[split_val:], temp_idx[:split_val]
+        valid_idx, test_idx = temp_idx[split_test:], temp_idx[:split_test]
 
     train_sampler = SubsetRandomSampler(train_idx)
     valid_sampler = SubsetRandomSampler(valid_idx)
@@ -144,13 +146,22 @@ data_plot = data_plotting.DataPlotting(UNKNOWN_CLASS, test_data, test_indexes)
 #helper.count_classes(val_set, BATCH_SIZE)
 #helper.count_classes(test_set, BATCH_SIZE)
 
-weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
+#weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
+weights = [3620, 10297, 2661, 688, 2109, 187, 200, 502]
+new_weights = []
+k =0.95
 
-summed = sum(weights)
+for weight in weights:
+    new_weights.append(((sum(weights))/weight)**k)
+
+new_weights = torch.Tensor(new_weights)
+print(new_weights)
+
+"""summed = sum(weights)
 new_weights = 164 / torch.Tensor(weights)
 
-"""new_weights = [weight/sum(weights) for weight in weights]
-print(new_weights)"""
+#new_weights = [weight/sum(weights) for weight in weights]
+#print(new_weights)
 
 #new_weights = [1.0 / weight for weight in weights]
 #new_weights = new_weights / sum(new_weights)
@@ -166,7 +177,7 @@ for weight in weights:
     index = index + 1
 
 new_weights = torch.Tensor(new_weights)
-print(new_weights)
+print(new_weights)"""
 #weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
 
 #new_weights = helper.apply_cost_matrix()
@@ -188,6 +199,8 @@ else:
     network.to(device)
     weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
 
+weights = [3620, 10297, 2661, 688, 2109, 187, 200, 502]
+    
 optim = optimizer.Adam(network.parameters(), lr=0.001, weight_decay=0.001)
 
 #weights = list(helper.count_classes(train_set, BATCH_SIZE).values())
@@ -195,10 +208,10 @@ optim = optimizer.Adam(network.parameters(), lr=0.001, weight_decay=0.001)
 
 """output_hook = model.OutputHook()
 network.relu.register_forward_hook(output_hook)
-activation_penalty = 0.001"""
+activation_penalty = 0.00001"""
 
 
-def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train_accuracy, mc_val_losses=[], mc_val_accuracies=[], verbose=False):
+def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train_accuracy, mc_val_losses, mc_val_accuracies, verbose=False):
     """
     trains the network while also recording the accuracy of the network on the training data
     :param verboose: If true dumps out debug info about which classes the network is predicting when correct and incorrect
@@ -266,7 +279,6 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
             for output in output_hook:
                 activation_cost += torch.norm(output, 1)
             activation_cost *= activation_penalty
-            
             loss += activation_cost"""
             
             loss.backward()
@@ -311,9 +323,9 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
             for label, count in incorrect_count.items():
                 print(f"{label}: {count / incorrect * 100}%")
 
-            print(f"\nCorrect = {correct}")
-            print(f"Total = {total}")
-            print(f"Training Accuracy = {accuracy}%")
+        print(f"\nCorrect = {correct}")
+        print(f"Total = {total}")
+        print(f"Training Accuracy = {accuracy}%")
 
         intervals.append(epoch + 1)
         train_losses.append(sum(losses) / len(losses))
@@ -621,9 +633,9 @@ if not os.path.exists("saved_models/"):
 
 for i in range(0, 10):
     
-    network = model.Classifier(image_size, 8, class_weights, device, dropout=0.5, BBB=BBB)
+    network = model.Classifier(image_size, 8, class_weights, device, dropout=0.6, BBB=BBB)
     network.to(device)
-    optim = optimizer.Adam(network.parameters(), lr=0.001, weight_decay=0.001)
+    optim = optimizer.Adam(network.parameters(), lr=0.0001, weight_decay=0.00001)
     
     if BBB:
         ROOT_SAVE_DIR = f"saved_models/BBB_Classifier_{i}/"
@@ -636,7 +648,9 @@ for i in range(0, 10):
               val_losses=[],
               train_losses=[],
               val_accuracies=[],
-              train_accuracies=[])
+              train_accuracies=[],
+              mc_val_losses=[],
+              mc_val_accuracies=[])
 
     if BBB:
 
@@ -644,10 +658,10 @@ for i in range(0, 10):
         network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR,
                                                                                                               8)
 
-        if not os.path.exists(SAVE_DIR + "/naturallog/"):
-            os.mkdir(SAVE_DIR + "/naturallog/")
-            os.mkdir(SAVE_DIR + "/variance/")
-            os.mkdir(SAVE_DIR + "/costs/")
+        if not os.path.exists(SAVE_DIR + "entropy/"):
+            os.mkdir(SAVE_DIR + "entropy/")
+            os.mkdir(SAVE_DIR + "variance/")
+            os.mkdir(SAVE_DIR + "costs/")
 
         predictions_BBB_entropy, predictions_BBB_var, costs_BBB = testing.predict(test_set, SAVE_DIR, network,
                                                                                   test_size, device, BBB=True,
@@ -667,10 +681,10 @@ for i in range(0, 10):
         network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR,
                                                                                                               8)
 
-        if not os.path.exists(SAVE_DIR + "/naturallog/"):
-            os.mkdir(SAVE_DIR + "/naturallog/")
-            os.mkdir(SAVE_DIR + "/variance/")
-            os.mkdir(SAVE_DIR + "/costs/")
+        if not os.path.exists(SAVE_DIR + "entropy/"):
+            os.mkdir(SAVE_DIR + "entropy/")
+            os.mkdir(SAVE_DIR + "variance/")
+            os.mkdir(SAVE_DIR + "costs/")
 
         predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, SAVE_DIR, network, test_size, device, mc_dropout=True, forward_passes=FORWARD_PASSES)
         helper.write_rows(predictions_mc_entropy, SAVE_DIR + "mc_entropy_predictions.csv")
@@ -692,10 +706,10 @@ for i in range(0, 10):
         network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR,
                                                                                                               8)
 
-        if not os.path.exists(SAVE_DIR + "/naturallog/"):
-            os.mkdir(SAVE_DIR + "/naturallog/")
-            os.mkdir(SAVE_DIR + "/variance/")
-            os.mkdir(SAVE_DIR + "/costs/")
+        if not os.path.exists(SAVE_DIR + "entropy/"):
+            os.mkdir(SAVE_DIR + "entropy/")
+            os.mkdir(SAVE_DIR + "variance/")
+            os.mkdir(SAVE_DIR + "costs/")
 
         predictions_softmax, costs_softmax = testing.predict(test_set, SAVE_DIR, network, test_size, device,
                                                              softmax=True)

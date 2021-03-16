@@ -170,7 +170,7 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
 
     network.eval()
 
-    for i_batch, sample_batch in enumerate(data_set):
+    for i_batch, sample_batch in enumerate(tqdm(data_set)):
         image_batch = sample_batch['image'].to(device)
         with torch.no_grad():
             efficient_net_output = network.extract_efficientNet(image_batch)
@@ -197,7 +197,7 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
                 if np.max(answers) > 0.9999:
                     entropy = 0.0
                 else:
-                    entropy = -np.sum(answers * np.log(answers), axis=0)  # shape (n_samples, n_classes)
+                    entropy = -np.sum(answers * np.log2(answers), axis=0)  # shape (n_samples, n_classes)
 
                 #current_costs = np.vstack((current_costs, helper.get_each_cost(answers)))
                 answers = np.append(answers, entropy)
@@ -243,11 +243,11 @@ def monte_carlo(data_set, forward_passes, network, n_samples, n_classes, root_di
         if i == 3:
             temp2 = np.array(mean_variance)
         if BBB:
-            helper.write_rows(mean_entropy, root_dir + f"naturallog/BBB_forward_pass_{i}_entropy.csv")
+            helper.write_rows(mean_entropy, root_dir + f"entropy/BBB_forward_pass_{i}_entropy.csv")
             helper.write_rows(mean_variance, root_dir + f"variance/BBB_forward_pass_{i}_variance.csv")
             helper.write_rows(costs_mean, root_dir + f"costs/BBB_forward_pass_{i}_costs.csv")
         else:
-            helper.write_rows(mean_entropy, root_dir + f"naturallog/mc_forward_pass_{i}_entropy.csv")
+            helper.write_rows(mean_entropy, root_dir + f"entropy/mc_forward_pass_{i}_entropy.csv")
             helper.write_rows(mean_variance, root_dir + f"variance/mc_forward_pass_{i}_variance.csv")
             helper.write_rows(costs_mean, root_dir + f"costs/mc_forward_pass_{i}_costs.csv")
 
