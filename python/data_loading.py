@@ -75,6 +75,16 @@ class data_set(Dataset):
         """
         return self.get_class_name(self.labels.iloc[index].values)[0]
 
+    def get_all_labels(self, test_indexes):
+
+        answers = []
+
+        for i in range(0, len(test_indexes)):
+            answers.append(self.get_class_name(self.labels.iloc[i].values)[0])
+
+        return answers
+
+
     def count_classes(self):
 
         """
