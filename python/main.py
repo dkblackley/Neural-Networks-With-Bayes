@@ -6,7 +6,7 @@ calling other classes for plotting results of the network
 
 EPOCHS = 15
 UNKNOWN_CLASS = False
-DEBUG = False #Toggle this to only run for 1% of the training data
+DEBUG = True #Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 64
 SOFTMAX = True
@@ -160,7 +160,7 @@ train_set, val_set, test_set, test_size, train_size, val_size, test_indexes = ge
 
 data_plot = data_plotting.DataPlotting(UNKNOWN_CLASS, test_data, test_indexes)
 
-helper.count_classes(train_set, BATCH_SIZE)
+#helper.count_classes(train_set, BATCH_SIZE)
 #helper.count_classes(val_set, BATCH_SIZE)
 #helper.count_classes(test_set, BATCH_SIZE)
 
@@ -665,8 +665,8 @@ for i in range(0, 10):
     
     network = model.Classifier(image_size, 8, class_weights, device, dropout=0.5, BBB=BBB)
     network.to(device)
-    optim = optimizer.SGD(network.parameters(), lr=0.01, momentum=0.9)
-    scheduler = optim.lr_scheduler.CyclicLR(optim, base_lr=1e-3, max_lr=1e-2, step_size_up=2000)
+    optim = optimizer.SGD(network.parameters(), lr=0.1)
+    scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.1, step_size_up=10)
     
     if BBB:
         ROOT_SAVE_DIR = f"saved_models/BBB_Classifier_{i}/"
