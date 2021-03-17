@@ -7,7 +7,7 @@ calling other classes for plotting results of the network
 EPOCHS = 2
 UNKNOWN_CLASS = False
 DEBUG = True #Toggle this to only run for 1% of the training data
-ENABLE_GPU = False  # Toggle this to enable or disable GPU
+ENABLE_GPU = True  # Toggle this to enable or disable GPU
 BATCH_SIZE = 64
 SOFTMAX = True
 MC_DROPOUT = False
@@ -56,7 +56,7 @@ weights = [3153, 9041, 2263, 626, 1863, 178, 177, 430]
 
 new_weights = []
 sampler_weights = []
-k = 0.25
+k = 1
 q = 0.25
 for weight in weights:
     new_weights.append(((sum(weights))/weight)**k)
@@ -64,6 +64,7 @@ for weight in weights:
 
 new_weights = torch.Tensor(new_weights)
 print(new_weights)
+print(sampler_weights)
 class_weights = new_weights.to(device)
 
 composed_train = transforms.Compose([
@@ -129,8 +130,8 @@ def get_data_sets(plot=False):
     weighted_train_idx = []
     for c in range(0, len(train_idx)):
         label = train_data.get_label(train_idx[c])
-        #weighted_idx = sampler_weights[label]
-        weighted_idx = 1
+        weighted_idx = sampler_weights[label]
+        #weighted_idx = 1
         weighted_train_idx.append(weighted_idx)
 
     weighted_train_sampler = WeightedRandomSampler(weights=weighted_train_idx, num_samples=len(weighted_train_idx), replacement=True)
@@ -154,20 +155,20 @@ def get_data_sets(plot=False):
 
     return training_set, valid_set, testing_set, len(test_idx), len(train_idx), len(valid_idx), test_idx
 
-train_set, val_set, test_set, test_size, train_size, val_size, test_indexes = get_data_sets(plot=True)
+train_set, val_set, test_set, test_size, train_size, val_size, test_indexes = get_data_sets(plot=False)
 
 data_plot = data_plotting.DataPlotting(UNKNOWN_CLASS, test_data, test_indexes)
 
-helper.count_classes(train_set, BATCH_SIZE)
-helper.count_classes(val_set, BATCH_SIZE)
-helper.count_classes(test_set, BATCH_SIZE)
+#helper.count_classes(train_set, BATCH_SIZE)
+#helper.count_classes(val_set, BATCH_SIZE)
+#helper.count_classes(test_set, BATCH_SIZE)
 
-train_names = []
+"""train_names = []
 val_names = []
 test_names = []
 
 
-"""for i_batch, sample_batch in enumerate(tqdm(train_set)):
+for i_batch, sample_batch in enumerate(tqdm(train_set)):
     for name in sample_batch['filename']:
         train_names.append(name)
 
@@ -316,12 +317,12 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
             activation_cost *= activation_penalty
             loss += activation_cost"""
             
-            L1_reg = torch.tensor(0., requires_grad=True)
+            """L1_reg = torch.tensor(0., requires_grad=True)
             for name, param in network.named_parameters():
                 if 'weight' in name:
                     L1_reg = L1_reg + torch.norm(param, 1)
 
-                loss = loss + 0.0001 * L1_reg
+                loss = loss + 0.0001 * L1_reg"""
             
             loss.backward()
             optim.step()
@@ -663,7 +664,7 @@ if not os.path.exists("saved_models/"):
 
 for i in range(0, 10):
     
-    network = model.Classifier(image_size, 8, class_weights, device, dropout=0.6, BBB=BBB)
+    network = model.Classifier(image_size, 8, class_weights, device, dropout=0.5, BBB=BBB)
     network.to(device)
     optim = optimizer.Adam(network.parameters(), lr=0.0001)
     
