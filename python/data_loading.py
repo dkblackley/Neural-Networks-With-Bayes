@@ -35,6 +35,9 @@ class data_set(Dataset):
         if labels_path:
             self.labels = pd.read_csv(labels_path)
             self.classes = self.labels.columns[1:10].values
+            self.labels = np.array(self.labels.values)
+            np.random.seed(1337)
+            np.random.shuffle(self.labels)
         else:
             self.labels = False
 
@@ -49,23 +52,24 @@ class data_set(Dataset):
         :return: dictionary containing image and label
         """
 
-        file_name = self.file_names[index]
+        #file_name = self.file_names[index]
+        file_name = self.labels[index][0] + '.jpg'
         full_path = os.path.join(self.train_image_dir, file_name)
         image = Image.open(full_path)
         if self.labels is False:
             label = False
         else:
-            label = self.get_class_name(self.labels.iloc[index].values)[0]
+            label = self.get_class_name(self.labels[index][1:-1])
 
         if self.transforms:
             image = self.transforms(image)
 
-        data = {'image': image, "label": label}
+        data = {'image': image, "label": label, 'filename': file_name}
 
         return data
 
     def get_filename(self, index):
-        return self.file_names[index]
+        return self.labels[index][1:] + '.jpg'
 
     def get_label(self, index):
         """
@@ -73,14 +77,14 @@ class data_set(Dataset):
         :param index:
         :return:
         """
-        return self.get_class_name(self.labels.iloc[index].values)[0]
+        return self.get_class_name(self.labels[index][1:-1])
 
     def get_all_labels(self, test_indexes):
 
         answers = []
 
         for i in range(0, len(test_indexes)):
-            answers.append(self.get_class_name(self.labels.iloc[i].values)[0])
+            answers.append(self.get_class_name(self.labels[i][1:-1]))
 
         return answers
 
@@ -97,7 +101,7 @@ class data_set(Dataset):
         print("Counting labels")
         for index in tqdm(range(len(self))):
 
-            label = self.get_class_name(self.labels.iloc[index].values)[0]
+            label = self.get_class_name(self.labels[index][1:-1])
             label = LABELS[label]
             try:
                 labels_count[label] += 1
@@ -154,7 +158,7 @@ class data_set(Dataset):
         :return:
         """
         index = np.where(numbers == 1.0)
-        return index[0] - 1
+        return index[0][0]
 
     def add_transforms(self, transforms):
         self.transforms = transforms

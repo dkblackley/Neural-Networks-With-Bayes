@@ -4,17 +4,17 @@ Deals with things like weight balancing, training and testing methods and
 calling other classes for plotting results of the network
 """
 
-EPOCHS = 60
+EPOCHS = 2
 UNKNOWN_CLASS = False
-DEBUG = False #Toggle this to only run for 1% of the training data
-ENABLE_GPU = True  # Toggle this to enable or disable GPU
+DEBUG = True #Toggle this to only run for 1% of the training data
+ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 64
 SOFTMAX = True
 MC_DROPOUT = False
 TRAIN_MC_DROPOUT = True
 COST_MATRIX = False
 TEST_COST_MATRIX = False
-FORWARD_PASSES = 100
+FORWARD_PASSES = 2
 BBB = False
 SAVE_DIR = "saved_model"
 
@@ -24,7 +24,7 @@ if TRAIN_MC_DROPOUT and BBB:
 import torch
 import torch.optim as optimizer
 from torchvision import transforms
-from torch.utils.data import random_split, SubsetRandomSampler, Subset, WeightedRandomSampler
+from torch.utils.data import random_split, SubsetRandomSampler, Subset, WeightedRandomSampler, SequentialSampler
 import numpy as np
 import data_loading
 import data_plotting
@@ -43,6 +43,7 @@ val_size = 0
 train_size = 0
 best_val = 0
 best_loss = 0
+np.random.seed(1337)
 
 if ENABLE_GPU:
     device = torch.device("cuda:0")
@@ -50,25 +51,29 @@ else:
     device = torch.device("cpu")
 
 
-weights = [3620, 10297, 2661, 688, 2109, 187, 200, 502]
-new_weights = []
-k =1.25
+#weights = [3620, 10297, 2661, 688, 2109, 187, 200, 502]
+weights = [3153, 9041, 2263, 626, 1863, 178, 177, 430]
 
+new_weights = []
+sampler_weights = []
+k = 0.25
+q = 0.25
 for weight in weights:
     new_weights.append(((sum(weights))/weight)**k)
+    sampler_weights.append(((sum(weights))/weight)**q)
 
 new_weights = torch.Tensor(new_weights)
 print(new_weights)
 class_weights = new_weights.to(device)
 
 composed_train = transforms.Compose([
-                                transforms.Resize(image_size*2)
-                                transforms.CenterCrop(image_size*1.25)
+                                transforms.Resize(int(image_size*1.75)),
+                                transforms.CenterCrop(int(image_size*1.25)),
+                                transforms.RandomAffine(0, shear=5),
                                 transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0)),
                                 transforms.ColorJitter(brightness=0.2, contrast=0.2),
                                 transforms.RandomVerticalFlip(),
                                 transforms.RandomHorizontalFlip(),
-                                transforms.RandomAffine(0, shear=0.01),
                                 transforms.ToTensor(),
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
@@ -103,11 +108,8 @@ def get_data_sets(plot=False):
         indices = list(range(len(train_data)))
         indices = [x for x in indices if x not in scc_idx]
 
-        split_train = int(np.floor(0.8 * len(indices)))
-        split_test = int(np.floor(0.75 * (len(indices) - split_train)))
-
-        np.random.seed(1337)
-        #np.random.shuffle(indices)
+        split_train = int(np.floor(0.7 * len(indices)))
+        split_test = int(np.floor(0.6667 * (len(indices) - split_train)))
 
         temp_idx, train_idx = indices[split_train:], indices[:split_train]
         valid_idx, test_idx = temp_idx[split_test:], temp_idx[:split_test]
@@ -116,31 +118,26 @@ def get_data_sets(plot=False):
             if i not in test_idx:
                 test_idx.append(i)
 
-        np.random.shuffle(test_idx)
-        
-
     else:
         indices = list(range(len(train_data)))
-        split_train = int(np.floor(0.8 * len(indices)))
-        split_test = int(np.floor(0.75 * (len(indices) - split_train)))
-
-        np.random.seed(1337)
-        #np.random.shuffle(indices)
+        split_train = int(np.floor(0.7 * len(indices)))
+        split_test = int(np.floor(0.6667 * (len(indices) - split_train)))
 
         temp_idx, train_idx = indices[split_train:], indices[:split_train]
         valid_idx, test_idx = temp_idx[split_test:], temp_idx[:split_test]
-    
+
     weighted_train_idx = []
     for c in range(0, len(train_idx)):
         label = train_data.get_label(train_idx[c])
-        weighted_idx = new_weights[label]
+        #weighted_idx = sampler_weights[label]
+        weighted_idx = 1
         weighted_train_idx.append(weighted_idx)
-    
+
     weighted_train_sampler = WeightedRandomSampler(weights=weighted_train_idx, num_samples=len(weighted_train_idx), replacement=True)
     valid_sampler = SubsetRandomSampler(valid_idx)
+
     # Don't shuffle the testing set for MC_DROPOUT
     testing_data = Subset(test_data, test_idx)
-    #test_sampler = SequentialSampler(test_temp)
 
     training_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=weighted_train_sampler, shuffle=False)
     valid_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=valid_sampler)
@@ -157,7 +154,7 @@ def get_data_sets(plot=False):
 
     return training_set, valid_set, testing_set, len(test_idx), len(train_idx), len(valid_idx), test_idx
 
-train_set, val_set, test_set, test_size, train_size, val_size, test_indexes = get_data_sets(plot=False)
+train_set, val_set, test_set, test_size, train_size, val_size, test_indexes = get_data_sets(plot=True)
 
 data_plot = data_plotting.DataPlotting(UNKNOWN_CLASS, test_data, test_indexes)
 
@@ -165,7 +162,34 @@ helper.count_classes(train_set, BATCH_SIZE)
 helper.count_classes(val_set, BATCH_SIZE)
 helper.count_classes(test_set, BATCH_SIZE)
 
-#weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
+train_names = []
+val_names = []
+test_names = []
+
+
+"""for i_batch, sample_batch in enumerate(tqdm(train_set)):
+    for name in sample_batch['filename']:
+        train_names.append(name)
+
+for i_batch, sample_batch in enumerate(tqdm(val_set)):
+    for name in sample_batch['filename']:
+        val_names.append(name)
+
+for i_batch, sample_batch in enumerate(tqdm(test_set)):
+    for name in sample_batch['filename']:
+        test_names.append(name)
+
+if bool(set(train_names) & set(val_names)):
+    intersection = set(train_names).intersection(val_names)
+    print(intersection)
+
+if bool(set(test_names) & set(val_names)):
+    intersection = set(test_names).intersection(val_names)
+    print(intersection)
+
+if bool(set(test_names) & set(train_names)):
+    intersection = set(test_names).intersection(train_names)
+    print(intersection)"""
 
 
 """summed = sum(weights)
@@ -637,7 +661,7 @@ def print_metrics(root_dir):
 if not os.path.exists("saved_models/"):
     os.mkdir("saved_models/")
 
-for i in range(0, 0):
+for i in range(0, 10):
     
     network = model.Classifier(image_size, 8, class_weights, device, dropout=0.6, BBB=BBB)
     network.to(device)
