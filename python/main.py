@@ -4,10 +4,10 @@ Deals with things like weight balancing, training and testing methods and
 calling other classes for plotting results of the network
 """
 
-EPOCHS = 2
+EPOCHS = 15
 UNKNOWN_CLASS = False
-DEBUG = True #Toggle this to only run for 1% of the training data
-ENABLE_GPU = True  # Toggle this to enable or disable GPU
+DEBUG = False #Toggle this to only run for 1% of the training data
+ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 64
 SOFTMAX = True
 MC_DROPOUT = False
@@ -57,8 +57,8 @@ weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441] #70%
 
 new_weights = []
 sampler_weights = []
-k = 1
-q = 0.25
+k = 0.5
+q = 0.5
 for weight in weights:
     new_weights.append(((sum(weights))/weight)**k)
     sampler_weights.append(((sum(weights))/weight)**q)
@@ -160,7 +160,7 @@ train_set, val_set, test_set, test_size, train_size, val_size, test_indexes = ge
 
 data_plot = data_plotting.DataPlotting(UNKNOWN_CLASS, test_data, test_indexes)
 
-#helper.count_classes(train_set, BATCH_SIZE)
+helper.count_classes(train_set, BATCH_SIZE)
 #helper.count_classes(val_set, BATCH_SIZE)
 #helper.count_classes(test_set, BATCH_SIZE)
 
@@ -225,8 +225,7 @@ if COST_MATRIX:
 else:
     loss_function = nn.CrossEntropyLoss(weight=class_weights)
 
-
-    
+"""
 if UNKNOWN_CLASS:
     network = model.Classifier(image_size, 7, class_weights, device, dropout=0.5, BBB=BBB)
     network.to(device)
@@ -238,7 +237,7 @@ else:
 
 weights = [3620, 10297, 2661, 688, 2109, 187, 200, 502]
     
-optim = optimizer.Adam(network.parameters(), lr=0.001, weight_decay=0.001)
+optim = optimizer.Adam(network.parameters(), lr=0.001, weight_decay=0.001)"""
 
 #weights = list(helper.count_classes(train_set, BATCH_SIZE).values())
 
@@ -297,9 +296,6 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
             image_batch = sample_batch['image'].to(device)
             label_batch = sample_batch['label'].to(device)
 
-
-            optim.zero_grad()
-
             if BBB:
 
                 outputs = network(image_batch, label_batch)
@@ -327,6 +323,8 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
             
             loss.backward()
             optim.step()
+            optim.zero_grad()
+            scheduler.step()
             percentage = (i_batch / len(train_set)) * 100  # Used for Debugging
 
             losses.append(loss.item())
@@ -667,7 +665,8 @@ for i in range(0, 10):
     
     network = model.Classifier(image_size, 8, class_weights, device, dropout=0.5, BBB=BBB)
     network.to(device)
-    optim = optimizer.Adam(network.parameters(), lr=0.0001)
+    optim = optimizer.SGD(network.parameters(), lr=0.01, momentum=0.9)
+    scheduler = optim.lr_scheduler.CyclicLR(optim, base_lr=1e-3, max_lr=1e-2, step_size_up=2000)
     
     if BBB:
         ROOT_SAVE_DIR = f"saved_models/BBB_Classifier_{i}/"
