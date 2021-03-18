@@ -4,17 +4,17 @@ Deals with things like weight balancing, training and testing methods and
 calling other classes for plotting results of the network
 """
 
-EPOCHS = 100
+EPOCHS = 3
 UNKNOWN_CLASS = False
-DEBUG = False #Toggle this to only run for 1% of the training data
-ENABLE_GPU = True  # Toggle this to enable or disable GPU
+DEBUG = True #Toggle this to only run for 1% of the training data
+ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
 MC_DROPOUT = False
 TRAIN_MC_DROPOUT = True
 COST_MATRIX = False
 TEST_COST_MATRIX = False
-FORWARD_PASSES = 100
+FORWARD_PASSES = 2
 BBB = False
 SAVE_DIR = "saved_model"
 
@@ -259,6 +259,8 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
     #input("\nHave you remembered to move the model out of saved model before loading in the best model?")
 
     intervals = []
+    avg_BBB_losses = []
+    BBB_val_losses = []
     if not val_accuracy:
         best_val = 0
         best_mc_val = 0
@@ -298,11 +300,8 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
             label_batch = sample_batch['label'].to(device)
 
             if BBB:
-
                 outputs = network(image_batch, label_batch)
-
                 efficientNet_loss = loss_function(outputs, label_batch)
-
                 loss = network.BBB_loss + efficientNet_loss
 
             else:
@@ -329,7 +328,9 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
             percentage = (i_batch / len(train_set)) * 100  # Used for Debugging
             
             if BBB:
+                BBB_losses.append(loss.item())
                 loss = efficientNet_loss
+
             losses.append(loss.item())
             index = 0
 
@@ -374,16 +375,19 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
 
         intervals.append(epoch + 1)
         train_losses.append(sum(losses) / len(losses))
+        if BBB:
+            avg_BBB_losses.append(sum(BBB_losses) / len(BBB_losses))
         print(f"Training loss: {sum(losses) / len(losses)}")
 
         train_accuracy.append(accuracy)
 
-        accuracy, val_loss, _ = test(val_set, verbose=verbose)
+        accuracy, val_loss, BBB_val, _ = test(val_set, verbose=verbose)
         val_losses.append(val_loss)
+        BBB_val_losses.append(BBB_val)
         val_accuracy.append(accuracy)
 
         if TRAIN_MC_DROPOUT:
-            accuracy, val_loss, _ = test(val_set, verbose=verbose, dropout=True)
+            accuracy, val_loss, BBB_val, _ = test(val_set, verbose=verbose, dropout=True)
             mc_val_losses.append(val_loss)
             mc_val_accuracies.append(accuracy)
         
@@ -418,6 +422,11 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
             data_plot.plot_loss(root_dir + "best_mc_loss/", intervals, mc_val_losses, train_losses)
             data_plot.plot_validation(root_dir + "best_mc_loss/", intervals, mc_val_accuracies, train_accuracy)
 
+        if BBB:
+            temp = [e for e in range(0, len(BBB_val_losses))]
+            data_plot.plot_loss(root_dir + "BBB_", temp, BBB_val_losses, avg_BBB_losses)
+            helper.write_csv(avg_BBB_losses, root_dir + "BBB_train_losses.csv")
+            helper.write_csv(BBB_val_losses, root_dir + "BBB_val_losses.csv")
     data_plot.plot_loss(root_dir, intervals, val_losses, train_losses)
     data_plot.plot_validation(root_dir, intervals, val_accuracy, train_accuracy)
     save_network(optim, scheduler, val_losses, train_losses, val_accuracy, train_accuracy, root_dir)
@@ -443,6 +452,7 @@ def test(testing_set, verbose=False, dropout=False):
     correct_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
     incorrect_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
     losses = []
+    BBB_losses = []
     confusion_matrix = []
 
     for i in range(8):
@@ -459,7 +469,6 @@ def test(testing_set, verbose=False, dropout=False):
 
                 if BBB:
                     outputs = network(image_batch, label_batch, sample=True, dropout=dropout)
-                    loss = loss_function(outputs, label_batch)
                     efficientNet_loss = loss_function(outputs, label_batch)
                     loss = network.BBB_loss + efficientNet_loss
 
@@ -467,11 +476,12 @@ def test(testing_set, verbose=False, dropout=False):
                     outputs = network(image_batch, dropout=dropout)
                     loss = loss_function(outputs, label_batch)
                     
+            if BBB:
+                BBB_losses.append(loss.item())
+                loss = efficientNet_loss
 
             losses.append(loss.item())
-
             index = 0
-
             for output in outputs:
 
                 answer = torch.argmax(output)
@@ -495,6 +505,9 @@ def test(testing_set, verbose=False, dropout=False):
                 break
 
     average_loss = (sum(losses) / len(losses))
+    average_BBB = 0
+    if BBB:
+        average_BBB = (sum(BBB_losses) / len(BBB_losses))
     accuracy = (correct / total) * 100
 
     if (verbose):
@@ -516,7 +529,7 @@ def test(testing_set, verbose=False, dropout=False):
     print(f"Test Accuracy = {accuracy}%")
     print(f"Test Loss = {average_loss}")
 
-    return accuracy, average_loss, confusion_matrix
+    return accuracy, average_loss, average_BBB, confusion_matrix
 
 def save_network(optim, scheduler, val_losses, train_losses, val_accuracies, train_accuracies, root_dir):
     
