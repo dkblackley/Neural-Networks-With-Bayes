@@ -38,9 +38,10 @@ def plot_set(data_set, data_plot, stop, batch_stop):
             break
 
 
-def save_net(net, optim, PATH):
+def save_net(net, optim, lr_sched, PATH):
     states = {'network': net.state_dict(),
-             'optimizer': optim.state_dict()}
+             'optimizer': optim.state_dict(),
+             'lr_sched': lr_sched.state_dict()}
     torch.save(states, PATH)
 
 def change_to_device(network, optim, device):
@@ -55,24 +56,29 @@ def change_to_device(network, optim, device):
 
 def load_net(PATH, image_size, output_size, device, class_weights):
     net = model.Classifier(image_size, output_size, device, class_weights)
-    optim = optimizer.Adam(net.parameters(), lr=0.001)
+    #optim = optimizer.Adam(net.parameters(), lr=0.001)
+    optim = optimizer.SGD(net.parameters(), lr=0.0001)
+    scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.01, step_size_up=5)
     states = torch.load(PATH, map_location=device)
 
     try:
         net.load_state_dict(states['network'])
         optim.load_state_dict(states['optimizer'])
+        scheduler.load_state_dict(states['lr_sched'])
     except Exception as e:
         net = model.Classifier(image_size, output_size, device, class_weights, BBB=True)
-        optim = optimizer.Adam(net.parameters(), lr=0.001, weight_decay=0.001)
+        #optim = optimizer.Adam(net.parameters(), lr=0.001, weight_decay=0.001)
+        optim = optimizer.SGD(net.parameters(), lr=0.0001)
 
         net.load_state_dict(states['network'])
         optim.load_state_dict(states['optimizer'])
+        scheduler.load_state_dict(states['lr_sched'])
 
     net.train()
     
+    net, optim = change_to_device(net, optim, device)
     
-    
-    return change_to_device(net, optim, device)
+    return net, optim, scheduler
 
 def get_mean_and_std(data_set):
     """

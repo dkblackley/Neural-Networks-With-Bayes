@@ -19,7 +19,7 @@ class Classifier(nn.Module):
     """
     Class that holds and runs the efficientnet CNN
     """
-    def __init__(self, image_size, output_size, class_weights, device, hidden_size=256, hidden_size2=256, dropout=0.5, BBB=False):
+    def __init__(self, image_size, output_size, class_weights, device, hidden_size=512, hidden_size2=128, dropout=0.5, BBB=False):
         """
         init function sets the type of efficientnet and any extra layers
         :param dropout: rate for dropout
@@ -44,16 +44,16 @@ class Classifier(nn.Module):
         # Initialises the classification head for generating predictions.
         if BBB:
             self.hidden_layer = BayesModel.BayesianLayer(encoder_size, hidden_size, device)
-            #self.hidden_layer2 = BayesModel.BayesianLayer(hidden_size, hidden_size2, device)
+            self.hidden_layer2 = BayesModel.BayesianLayer(hidden_size, hidden_size2, device)
 
         else:
             self.hidden_layer = nn.Linear(encoder_size, hidden_size)
-            #self.hidden_layer2 = nn.Linear(hidden_size, hidden_size2)
+            self.hidden_layer2 = nn.Linear(hidden_size, hidden_size2)
 
         self.bn1 = nn.BatchNorm1d(num_features=hidden_size)
-        #self.bn2 = nn.BatchNorm1d(num_features=hidden_size2)
-        #self.output_layer = nn.Linear(hidden_size2, output_size)
-        self.output_layer = nn.Linear(hidden_size, output_size)
+        self.bn2 = nn.BatchNorm1d(num_features=hidden_size2)
+        self.output_layer = nn.Linear(hidden_size2, output_size)
+        #self.output_layer = nn.Linear(hidden_size, output_size)
 
     def forward(self, input, labels=None, sample=False, drop_rate=None, dropout=False):
         """
@@ -89,7 +89,7 @@ class Classifier(nn.Module):
                 return output
             else:
                 output = self.relu(self.bn1(self.hidden_layer(input)))
-                #output = self.relu(self.bn2(self.hidden_layer2(output)))
+                output = self.relu(self.bn2(self.hidden_layer2(output)))
                 
                 #output = self.relu(self.hidden_layer(input))
                 #output = self.relu(self.hidden_layer2(output))
@@ -108,10 +108,10 @@ class Classifier(nn.Module):
         if dropout:
             output = TF.dropout(output, drop_rate)
         
-        #output = self.relu(self.bn2(self.hidden_layer2(output)))
-        """output = self.relu(self.hidden_layer2(output))
+        output = self.relu(self.bn2(self.hidden_layer2(output)))
+        #output = self.relu(self.hidden_layer2(output))
         if dropout:
-            output = TF.dropout(output, drop_rate)"""
+            output = TF.dropout(output, drop_rate)
 
         output = self.output_layer(output)
         return output
@@ -120,7 +120,7 @@ class Classifier(nn.Module):
     #Methods for BBB
     def bayesian_sample(self, input):
         output = self.relu(self.bn1(self.hidden_layer(input)))
-        #output = self.relu(self.bn2(self.hidden_layer2(output)))
+        output = self.relu(self.bn2(self.hidden_layer2(output)))
         
         #output = self.relu(self.hidden_layer(input))
         #output = self.relu(self.hidden_layer2(output))
@@ -130,10 +130,10 @@ class Classifier(nn.Module):
         return output
     
     def log_prior(self):
-        return self.hidden_layer.log_prior# + self.hidden_layer2.log_prior
+        return self.hidden_layer.log_prior + self.hidden_layer2.log_prior
 
     def log_variational_posterior(self):
-        return self.hidden_layer.log_variational_posterior# + self.hidden_layer2.log_variational_posterior
+        return self.hidden_layer.log_variational_posterior + self.hidden_layer2.log_variational_posterior
 
     def sample_elbo(self, input, target, samples=1, n_classes=8):
         
@@ -153,7 +153,7 @@ class Classifier(nn.Module):
         log_variational_posterior = log_variational_posteriors.mean()
         
     
-        negative_log_likelihood = TF.cross_entropy(outputs.mean(0), target, weight=self.class_weights, reduction='mean')
+        negative_log_likelihood = TF.cross_entropy(outputs.mean(0), target, weight=self.class_weights, reduction='sum')
 
         KL_divergence = (log_variational_posterior - log_prior)
         loss = KL_divergence / num_batches + negative_log_likelihood
