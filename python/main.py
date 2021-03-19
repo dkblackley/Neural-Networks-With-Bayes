@@ -4,17 +4,17 @@ Deals with things like weight balancing, training and testing methods and
 calling other classes for plotting results of the network
 """
 
-EPOCHS = 3
+EPOCHS = 100
 UNKNOWN_CLASS = False
-DEBUG = True #Toggle this to only run for 1% of the training data
-ENABLE_GPU = False  # Toggle this to enable or disable GPU
+DEBUG = False #Toggle this to only run for 1% of the training data
+ENABLE_GPU = True  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
 MC_DROPOUT = False
 TRAIN_MC_DROPOUT = True
 COST_MATRIX = False
 TEST_COST_MATRIX = False
-FORWARD_PASSES = 2
+FORWARD_PASSES = 100
 BBB = False
 SAVE_DIR = "saved_model"
 
@@ -63,10 +63,13 @@ for weight in weights:
     new_weights.append(((sum(weights))/weight)**k)
     sampler_weights.append(((sum(weights))/weight)**q)
 
-new_weights = torch.Tensor(new_weights)
-print(new_weights)
+class_weights = torch.Tensor(new_weights)
+sampler_weights = torch.Tensor(sampler_weights)
+
+class_weights = class_weights.to(device)
+sampler_weights = sampler_weights.to(device)
+print(class_weights)
 print(sampler_weights)
-class_weights = new_weights.to(device)
 
 composed_train = transforms.Compose([
                                 transforms.Resize(int(image_size*1.75)),
@@ -219,11 +222,11 @@ print(new_weights)"""
 
 #new_weights = helper.apply_cost_matrix()
 
-class_weights = new_weights.to(device)
 if COST_MATRIX:
     loss_function = nn.CrossEntropyLoss(weight=class_weights, reduction='none')
 else:
     loss_function = nn.CrossEntropyLoss(weight=class_weights)
+    val_loss_fuinction = nn.CrossEntropyLoss(weight=sampler_weights)
 
 """
 if UNKNOWN_CLASS:
@@ -261,6 +264,7 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
     intervals = []
     avg_BBB_losses = []
     BBB_val_losses = []
+    best_BBB_loss = 1000000
     if not val_accuracy:
         best_val = 0
         best_mc_val = 0
@@ -427,6 +431,12 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
             data_plot.plot_loss(root_dir + "BBB_", temp, BBB_val_losses, avg_BBB_losses)
             helper.write_csv(avg_BBB_losses, root_dir + "BBB_train_losses.csv")
             helper.write_csv(BBB_val_losses, root_dir + "BBB_val_losses.csv")
+            
+            if best_BBB_loss > min(BBB_val_losses):
+                save_network(optim, scheduler, BBB_val_losses, avg_BBB_losses, val_accuracy, train_accuracy, root_dir + "best_BBB_loss/")
+                best_BBB_loss = min(BBB_val_losses)
+                data_plot.plot_loss(root_dir + "best_BBB_loss/", temp, BBB_val_losses, avg_BBB_losses)
+                data_plot.plot_validation(root_dir + "best_BBB_loss/", temp, val_accuracy, train_accuracy)
     data_plot.plot_loss(root_dir, intervals, val_losses, train_losses)
     data_plot.plot_validation(root_dir, intervals, val_accuracy, train_accuracy)
     save_network(optim, scheduler, val_losses, train_losses, val_accuracy, train_accuracy, root_dir)
@@ -469,12 +479,12 @@ def test(testing_set, verbose=False, dropout=False):
 
                 if BBB:
                     outputs = network(image_batch, label_batch, sample=True, dropout=dropout)
-                    efficientNet_loss = loss_function(outputs, label_batch)
+                    efficientNet_loss = val_loss_fuinction(outputs, label_batch)
                     loss = network.BBB_loss + efficientNet_loss
 
                 else:
                     outputs = network(image_batch, dropout=dropout)
-                    loss = loss_function(outputs, label_batch)
+                    loss = val_loss_fuinction(outputs, label_batch)
                     
             if BBB:
                 BBB_losses.append(loss.item())
@@ -703,7 +713,7 @@ for i in range(0, 10):
 
     if BBB:
 
-        SAVE_DIR = ROOT_SAVE_DIR + "best_loss/"
+        SAVE_DIR = ROOT_SAVE_DIR + "best_BBB_loss/"
         network, optim, scheduler, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR,
                                                                                                               8)
 

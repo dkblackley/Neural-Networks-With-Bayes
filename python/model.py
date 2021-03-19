@@ -112,7 +112,7 @@ class Classifier(nn.Module):
         #output = self.relu(self.hidden_layer2(output))
         if dropout:
             output = TF.dropout(output, drop_rate)
-
+            
         output = self.output_layer(output)
         return output
     
