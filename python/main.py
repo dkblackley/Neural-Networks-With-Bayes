@@ -72,13 +72,14 @@ print(class_weights)
 print(sampler_weights)
 
 composed_train = transforms.Compose([
+                                transforms.RandomVerticalFlip(),
+                                transforms.RandomHorizontalFlip(),
+                                transforms.RandomRotation(180),
                                 transforms.Resize(int(image_size*1.75)),
                                 transforms.CenterCrop(int(image_size*1.25)),
                                 transforms.RandomAffine(0, shear=5),
                                 transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0)),
                                 transforms.ColorJitter(brightness=0.2, contrast=0.2, hue=0.2),
-                                transforms.RandomVerticalFlip(),
-                                transforms.RandomHorizontalFlip(),
                                 transforms.ToTensor(),
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
                                 transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
