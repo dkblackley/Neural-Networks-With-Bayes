@@ -57,8 +57,8 @@ def change_to_device(network, optim, device):
 def load_net(PATH, image_size, output_size, device, class_weights):
     net = model.Classifier(image_size, output_size, device, class_weights)
     #optim = optimizer.Adam(net.parameters(), lr=0.001)
-    optim = optimizer.SGD(net.parameters(), lr=0.0001)
-    scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.01, step_size_up=5)
+    optim = optimizer.SGD(net.parameters(), lr=0.00001)
+    scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.00001, max_lr=0.01, step_size_up=10)
     states = torch.load(PATH, map_location=device)
 
     try:
@@ -68,7 +68,8 @@ def load_net(PATH, image_size, output_size, device, class_weights):
     except Exception as e:
         net = model.Classifier(image_size, output_size, device, class_weights, BBB=True)
         #optim = optimizer.Adam(net.parameters(), lr=0.001, weight_decay=0.001)
-        optim = optimizer.SGD(net.parameters(), lr=0.0001)
+        optim = optimizer.SGD(net.parameters(), lr=0.00001)
+        #scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.00001, max_lr=0.01, step_size_up=10)
 
         net.load_state_dict(states['network'])
         optim.load_state_dict(states['optimizer'])

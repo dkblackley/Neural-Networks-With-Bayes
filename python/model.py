@@ -19,7 +19,7 @@ class Classifier(nn.Module):
     """
     Class that holds and runs the efficientnet CNN
     """
-    def __init__(self, image_size, output_size, class_weights, device, hidden_size=512, hidden_size2=128, dropout=0.5, BBB=False):
+    def __init__(self, image_size, output_size, class_weights, device, hidden_size=512, hidden_size2=512, hidden_size3=512, dropout=0.5, BBB=False):
         """
         init function sets the type of efficientnet and any extra layers
         :param dropout: rate for dropout
@@ -35,6 +35,8 @@ class Classifier(nn.Module):
         #self.relu = torch.nn.LeakyReLU()
         #self.relu = torch.nn.Tanh()
         self.relu = torch.nn.ReLU()
+        
+        print(f"1: {hidden_size}, 2: {hidden_size2}, 3: {hidden_size3}")
 
         with torch.no_grad():
 
@@ -45,17 +47,23 @@ class Classifier(nn.Module):
         if BBB:
             self.hidden_layer = BayesModel.BayesianLayer(encoder_size, hidden_size, device)
             self.hidden_layer2 = BayesModel.BayesianLayer(hidden_size, hidden_size2, device)
+            #self.hidden_layer3 = BayesModel.BayesianLayer(hidden_size2, hidden_size3, device)
 
         else:
             self.hidden_layer = nn.Linear(encoder_size, hidden_size)
             self.hidden_layer2 = nn.Linear(hidden_size, hidden_size2)
+            #self.hidden_layer3 = nn.Linear(hidden_size2, hidden_size3)
 
         self.bn1 = nn.BatchNorm1d(num_features=hidden_size)
         self.bn2 = nn.BatchNorm1d(num_features=hidden_size2)
-        self.output_layer = nn.Linear(hidden_size2, output_size)
+        #self.bn3 = nn.BatchNorm1d(num_features=hidden_size3)
+        
         #self.output_layer = nn.Linear(hidden_size, output_size)
+        self.output_layer = nn.Linear(hidden_size2, output_size)
+        #self.output_layer = nn.Linear(hidden_size3, output_size)
+        
 
-    def forward(self, input, labels=None, sample=False, drop_rate=None, dropout=False):
+    def forward(self, input, train_mc=False, labels=None, sample=False, drop_rate=None, dropout=False, samples=10):
         """
         Method for handling a forward pass though the network, applies dropout using nn.functional
         :param input: input batch to be processed
@@ -65,6 +73,19 @@ class Classifier(nn.Module):
         
 
         output = self.extract_efficientNet(input)
+        
+        """if train_mc:
+            batch_size = 32
+            batch_size = input.size()[0]
+            outputs = torch.zeros(samples, batch_size, n_classes).to(self.device)
+            
+            for i in range(samples):
+                outputs[i] = self.pass_through_layers(output, labels=labels, sample=sample, drop_rate=drop_rate, dropout=dropout)
+            
+            output = outputs.mean(0)
+        
+        else:"""
+        
         output = self.pass_through_layers(output, labels=labels, sample=sample, drop_rate=drop_rate, dropout=dropout)
 
         return output
@@ -90,6 +111,7 @@ class Classifier(nn.Module):
             else:
                 output = self.relu(self.bn1(self.hidden_layer(input)))
                 output = self.relu(self.bn2(self.hidden_layer2(output)))
+                #output = self.relu(self.bn3(self.hidden_layer3(output)))
                 
                 #output = self.relu(self.hidden_layer(input))
                 #output = self.relu(self.hidden_layer2(output))
@@ -112,7 +134,12 @@ class Classifier(nn.Module):
         #output = self.relu(self.hidden_layer2(output))
         if dropout:
             output = TF.dropout(output, drop_rate)
-            
+        
+        """output = self.relu(self.bn3(self.hidden_layer3(output)))
+        #output = self.relu(self.hidden_layer2(output))
+        if dropout:
+            output = TF.dropout(output, drop_rate)"""
+        
         output = self.output_layer(output)
         return output
     
@@ -121,6 +148,7 @@ class Classifier(nn.Module):
     def bayesian_sample(self, input):
         output = self.relu(self.bn1(self.hidden_layer(input)))
         output = self.relu(self.bn2(self.hidden_layer2(output)))
+        #output = self.relu(self.bn3(self.hidden_layer3(output)))
         
         #output = self.relu(self.hidden_layer(input))
         #output = self.relu(self.hidden_layer2(output))
@@ -130,12 +158,12 @@ class Classifier(nn.Module):
         return output
     
     def log_prior(self):
-        return self.hidden_layer.log_prior + self.hidden_layer2.log_prior
+        return self.hidden_layer.log_prior + self.hidden_layer2.log_prior# + self.hidden_layer3.log_prior
 
     def log_variational_posterior(self):
-        return self.hidden_layer.log_variational_posterior + self.hidden_layer2.log_variational_posterior
+        return self.hidden_layer.log_variational_posterior + self.hidden_layer2.log_variational_posterior# + self.hidden_layer3.log_variational_posterior
 
-    def sample_elbo(self, input, target, samples=1, n_classes=8):
+    def sample_elbo(self, input, target, samples=10, n_classes=8):
         
         num_batches = 555
         batch_size = input.size()[0]
@@ -151,7 +179,6 @@ class Classifier(nn.Module):
 
         log_prior = log_priors.mean()
         log_variational_posterior = log_variational_posteriors.mean()
-        
     
         negative_log_likelihood = TF.cross_entropy(outputs.mean(0), target, weight=self.class_weights, reduction='sum')
 

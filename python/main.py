@@ -46,7 +46,7 @@ best_loss = 0
 np.random.seed(1337)
 
 if ENABLE_GPU:
-    device = torch.device("cuda:1")
+    device = torch.device("cuda")
 else:
     device = torch.device("cpu")
 
@@ -74,8 +74,8 @@ print(sampler_weights)
 composed_train = transforms.Compose([
                                 transforms.RandomVerticalFlip(),
                                 transforms.RandomHorizontalFlip(),
-                                transforms.RandomRotation(180),
-                                transforms.Resize(int(image_size*1.75)),
+                                transforms.RandomRotation(35),
+                                transforms.Resize(int(image_size*1.5)),
                                 transforms.CenterCrop(int(image_size*1.25)),
                                 transforms.RandomAffine(0, shear=5),
                                 transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0)),
@@ -305,7 +305,7 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
             label_batch = sample_batch['label'].to(device)
 
             if BBB:
-                outputs = network(image_batch, label_batch)
+                outputs = network(image_batch, labels=label_batch)
                 efficientNet_loss = loss_function(outputs, label_batch)
                 loss = network.BBB_loss + efficientNet_loss
 
@@ -479,7 +479,7 @@ def test(testing_set, verbose=False, dropout=False):
             with torch.no_grad():
 
                 if BBB:
-                    outputs = network(image_batch, label_batch, sample=True, dropout=dropout)
+                    outputs = network(image_batch, labels=label_batch, sample=True, dropout=dropout)
                     efficientNet_loss = val_loss_fuinction(outputs, label_batch)
                     loss = network.BBB_loss + efficientNet_loss
 
@@ -694,15 +694,29 @@ for i in range(0, 10):
     
     network = model.Classifier(image_size, 8, class_weights, device, dropout=0.5, BBB=BBB)
     network.to(device)
+    
+    #optim = optimizer.Adam(network.parameters(), lr=0.001)
+    
+    #optim = optimizer.SGD(network.parameters(), lr=0.0001)
+    #scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.01, step_size_up=10)
+    
     optim = optimizer.SGD(network.parameters(), lr=0.00001, momentum=0.75)
     scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.00001, max_lr=0.01, step_size_up=10)
     
-    if BBB:
-        ROOT_SAVE_DIR = f"saved_models/BBB_Classifier_{i}/"
-    else:
-        ROOT_SAVE_DIR = f"saved_models/Classifier_{i}/"
+    print(optim)
     
-
+    ROOT_SAVE_DIR = f"saved_models"
+    #ROOT_SAVE_DIR = f"test_models"
+    
+    if not os.path.exists(ROOT_SAVE_DIR):
+        os.mkdir(ROOT_SAVE_DIR)
+        
+    
+    if BBB:
+        ROOT_SAVE_DIR += f"/BBB_Classifier_{i}/"
+    else:
+        ROOT_SAVE_DIR += f"/Classifier_{i}/"
+        
     train_net(ROOT_SAVE_DIR,
               starting_epoch=0,
               val_losses=[],
