@@ -63,7 +63,7 @@ class Classifier(nn.Module):
         #self.output_layer = nn.Linear(hidden_size3, output_size)
         
 
-    def forward(self, input, train_mc=False, labels=None, sample=False, drop_rate=None, dropout=False, samples=10):
+    def forward(self, input, train_mc=False, labels=None, drop_samples=1, sample=False, drop_rate=None, dropout=False, samples=10):
         """
         Method for handling a forward pass though the network, applies dropout using nn.functional
         :param input: input batch to be processed
@@ -86,7 +86,7 @@ class Classifier(nn.Module):
         
         else:"""
         
-        output = self.pass_through_layers(output, labels=labels, sample=sample, drop_rate=drop_rate, dropout=dropout)
+        output = self.pass_through_layers(output, labels=labels, sample=sample, drop_rate=drop_rate, drop_samples=drop_samples, dropout=dropout)
 
         return output
 
@@ -97,7 +97,7 @@ class Classifier(nn.Module):
 
         return output
 
-    def pass_through_layers(self, input, labels=None, sample=False, drop_rate=None, dropout=False):
+    def pass_through_layers(self, input, labels=None, sample=False, drop_rate=None, drop_samples=1, dropout=False):
 
         if drop_rate is None:
             drop_rate = self.drop_rate
@@ -117,31 +117,32 @@ class Classifier(nn.Module):
                 #output = self.relu(self.hidden_layer2(output))
                 
                 return self.output_layer(output)
+        outputs = torch.zeros(drop_samples, input.size()[0], self.output_size).to(self.device)
+        for i in range(0, drop_samples):
+            if dropout:
+                input = TF.dropout(input, drop_rate)
 
-        elif dropout:
-            input = TF.dropout(input, drop_rate)
-        
-        #print("\nInput size: " + str(input.shape[1]))
-        #print("\nLinear Size: " + str(self.hidden_layer.in_features))
-        
-        output = self.relu(self.bn1(self.hidden_layer(input)))
-        #output = self.relu(self.hidden_layer(input))
+            #print("\nInput size: " + str(input.shape[1]))
+            #print("\nLinear Size: " + str(self.hidden_layer.in_features))
 
-        if dropout:
-            output = TF.dropout(output, drop_rate)
-        
-        output = self.relu(self.bn2(self.hidden_layer2(output)))
-        #output = self.relu(self.hidden_layer2(output))
-        if dropout:
-            output = TF.dropout(output, drop_rate)
-        
-        """output = self.relu(self.bn3(self.hidden_layer3(output)))
-        #output = self.relu(self.hidden_layer2(output))
-        if dropout:
-            output = TF.dropout(output, drop_rate)"""
-        
-        output = self.output_layer(output)
-        return output
+            output = self.relu(self.bn1(self.hidden_layer(input)))
+            #output = self.relu(self.hidden_layer(input))
+
+            if dropout:
+                output = TF.dropout(output, drop_rate)
+
+            output = self.relu(self.bn2(self.hidden_layer2(output)))
+            #output = self.relu(self.hidden_layer2(output))
+            if dropout:
+                output = TF.dropout(output, drop_rate)
+
+            """output = self.relu(self.bn3(self.hidden_layer3(output)))
+            #output = self.relu(self.hidden_layer2(output))
+            if dropout:
+                output = TF.dropout(output, drop_rate)"""
+
+            outputs[i] = self.output_layer(output)
+        return outputs.mean(0)
     
     
     #Methods for BBB

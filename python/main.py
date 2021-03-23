@@ -6,8 +6,8 @@ calling other classes for plotting results of the network
 
 EPOCHS = 100
 UNKNOWN_CLASS = False
-DEBUG = False #Toggle this to only run for 1% of the training data
-ENABLE_GPU = True  # Toggle this to enable or disable GPU
+DEBUG = True #Toggle this to only run for 1% of the training data
+ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
 MC_DROPOUT = False
@@ -392,7 +392,7 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
         val_accuracy.append(accuracy)
 
         if TRAIN_MC_DROPOUT:
-            accuracy, val_loss, BBB_val, _ = test(val_set, verbose=verbose, dropout=True)
+            accuracy, val_loss, BBB_val, _ = test(val_set, verbose=verbose, drop_samples=10, dropout=True)
             mc_val_losses.append(val_loss)
             mc_val_accuracies.append(accuracy)
         
@@ -445,7 +445,7 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
     return intervals, val_losses, train_losses, val_accuracy, train_accuracy
 
 
-def test(testing_set, verbose=False, dropout=False):
+def test(testing_set, drop_samples=1, verbose=False, dropout=False):
     """
     Use to test the network on a given data set
     :param testing_set: The data set that the network will predict for
@@ -484,7 +484,7 @@ def test(testing_set, verbose=False, dropout=False):
                     loss = network.BBB_loss + efficientNet_loss
 
                 else:
-                    outputs = network(image_batch, dropout=dropout)
+                    outputs = network(image_batch, drop_samples=drop_samples, dropout=dropout)
                     loss = val_loss_fuinction(outputs, label_batch)
                     
             if BBB:
@@ -584,10 +584,11 @@ def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_ac
 def print_metrics(root_dir):
     helper.remove_last_row(costs_sr)
     helper.remove_last_row(costs_mc)
+    helper.remove_last_row(costs_BBB)
 
-    data_plot.plot_risk_coverage([predictions_mc, predictions_softmax], root_dir, "Risk Coverage")
+    data_plot.plot_risk_coverage([predictions_mc, predictions_softmax, predictions_BBB], root_dir, "Risk Coverage")
 
-    data_plot.plot_true_cost_coverage_by_class([costs_mc, costs_sr], root_dir,
+    data_plot.plot_true_cost_coverage_by_class([costs_mc, costs_sr, costs_BBB], root_dir,
                                                "Average Test cost by Classes using LEC")
     data_plot.plot_true_cost_coverage([costs_mc, costs_sr], root_dir, "Coverage by Average Test cost", uncertainty=False)
 
@@ -806,6 +807,11 @@ SAVE_DIR = "saved_models/Classifier_0/best_loss/"
 
 predictions_softmax = helper.read_rows(SAVE_DIR + "softmax_predictions.csv")
 costs_sr = helper.read_rows(SAVE_DIR + "softmax_costs.csv")
+
+SAVE_DIR = "saved_models/BBB_Classifier_0/best_BBB_loss/"
+
+predictions_BBB = helper.read_rows(SAVE_DIR + "BBB_entropy_predictions.csv")
+costs_BBB = helper.read_rows(SAVE_DIR + "BBB_costs.csv")
 
 predictions_softmax = helper.string_to_float(predictions_softmax)
 costs_sr = helper.string_to_float(costs_sr)

@@ -292,6 +292,7 @@ class DataPlotting:
 
         # Remove the highest uncertainty and then remove that prediction from the answers and continually re-get average accuracy
         for i in tqdm(range(0, len(self.test_indexes))):
+            coverage.append(i/len(self.test_indexes))
             for c in range(0, len(predictions)):
                 total = 0
                 correct = 0
@@ -309,26 +310,25 @@ class DataPlotting:
                 uncertainties[c] = np.delete(uncertainties[c], max_uncertainty_row, axis=0)
                 del answers[c][max_uncertainty_row]
 
+        coverage.reverse()
 
+        dropout_AUC = round(metrics.auc(coverage, accuracies[0]), 3)
+        softmax_AUC = round(metrics.auc(coverage, accuracies[1]), 3)
+        BBB_AUC = round(metrics.auc(coverage, accuracies[2]), 3)
 
-        dropout_AUC = round(metrics.auc(coverage, accuracies[1]), 3)
-        softmax_AUC = round(metrics.auc(coverage, accuracies[0]), 3)
-
-
-        plt.plot(coverage, accuracies[1], label="MC Dropout")
         plt.plot(coverage, accuracies[0], label="Softmax response")
-        maxi = max([max(accuracies[1]) + 10, max(accuracies[1]) + 10])
-        plt.ylim([0, maxi])
+        plt.plot(coverage, accuracies[1], label="MC Dropout")
+        plt.plot(coverage, accuracies[2], label="BbB")
         plt.title(title)
         plt.xlabel("Coverage")
         plt.ylabel("100 - Accuracy")
         plt.legend(loc='best')
-        txt_string = '\n'.join((
+        """txt_string = '\n'.join((
             f'Softmax Response AUC: {softmax_AUC}',
             f'MC Dropout AUC: {dropout_AUC}'
-        ))
+        ))"""
         props = dict(boxstyle='round', fc='white', alpha=0.5)
-        plt.text(0.6, 5, txt_string, bbox=props, fontsize=10)
+        #plt.text(0.6, 5, txt_string, bbox=props, fontsize=10)
 
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
@@ -616,6 +616,7 @@ class DataPlotting:
 
             a.plot(coverage[self.LABELS[idx]], results_average[0][self.LABELS[idx]], label="MC Dropout")
             a.plot(coverage[self.LABELS[idx]], results_average[1][self.LABELS[idx]], label="Softmax Response")
+            a.plot(coverage[self.LABELS[idx]], results_average[2][self.LABELS[idx]], label="BbB")
             a.set_title(titles[idx])
 
             if idx == 3:
