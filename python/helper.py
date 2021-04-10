@@ -58,7 +58,7 @@ def load_net(PATH, image_size, output_size, device, class_weights):
     net = model.Classifier(image_size, output_size, device, class_weights)
     #optim = optimizer.Adam(net.parameters(), lr=0.001)
     optim = optimizer.SGD(net.parameters(), lr=0.00001)
-    scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.00001, max_lr=0.01, step_size_up=10)
+    scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.03, step_size_up=(555 * 10))
     states = torch.load(PATH, map_location=device)
 
     try:
@@ -67,12 +67,21 @@ def load_net(PATH, image_size, output_size, device, class_weights):
         scheduler.load_state_dict(states['lr_sched'])
     except Exception as e:
         net = model.Classifier(image_size, output_size, device, class_weights, BBB=True)
-        #optim = optimizer.Adam(net.parameters(), lr=0.001, weight_decay=0.001)
-        optim = optimizer.SGD(net.parameters(), lr=0.00001)
-        #scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.00001, max_lr=0.01, step_size_up=10)
+        
+        BBB_weights = ['hidden_layer.weight_mu', 'hidden_layer.weight_rho', 'hidden_layer.bias_mu', 'hidden_layer.bias_rho',
+                      'hidden_layer2.weight_mu', 'hidden_layer2.weight_rho', 'hidden_layer2.bias_mu', 'hidden_layer2.bias_rho']
+        BBB_parameters = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] in BBB_weights, net.named_parameters()))))
+        base_parameters = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] not in BBB_weights, net.named_parameters()))))
+        
+    
+        optim = optimizer.SGD([
+                {'params': BBB_parameters},
+                {'params': base_parameters, 'lr': 0.0001}
+            ], lr=0.0001, momentum=0.9)
+        scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=[0.0001, 0.0001], max_lr=[0.12, 0.03], step_size_up=(555 * 10), mode="exp_range", gamma=0.9999)
 
         net.load_state_dict(states['network'])
-        optim.load_state_dict(states['optimizer'])
+        optim.load_state_dict(states['optimizer']) 
         scheduler.load_state_dict(states['lr_sched'])
 
     net.train()

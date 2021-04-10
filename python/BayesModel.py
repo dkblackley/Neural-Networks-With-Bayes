@@ -12,7 +12,7 @@ class GaussianDistribution():
         self.mu = mu
         self.rho = rho
         self.device = device
-        self.normal = torch.distributions.Normal(0, 1)
+        self.normal = torch.distributions.Normal(0, 1, validate_args=True)
 
     @property
     def sigma(self):
@@ -36,8 +36,8 @@ class ScaleMixtureGaussian():
         self.sigma1 = sigma1
         self.sigma2 = sigma2
         self.device = device
-        self.gaussian1 = torch.distributions.Normal(torch.tensor(0).to(device), sigma1)
-        self.gaussian2 = torch.distributions.Normal(torch.tensor(0).to(device), sigma2)
+        self.gaussian1 = torch.distributions.Normal(torch.tensor(0).to(device), sigma1, validate_args=True)
+        self.gaussian2 = torch.distributions.Normal(torch.tensor(0).to(device), sigma2, validate_args=True)
 
     def log_prob(self, input):
                

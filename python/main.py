@@ -6,8 +6,8 @@ calling other classes for plotting results of the network
 
 EPOCHS = 100
 UNKNOWN_CLASS = False
-DEBUG = True #Toggle this to only run for 1% of the training data
-ENABLE_GPU = False  # Toggle this to enable or disable GPU
+DEBUG = False #Toggle this to only run for 1% of the training data
+ENABLE_GPU = True  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
 SOFTMAX = True
 MC_DROPOUT = False
@@ -17,8 +17,11 @@ TEST_COST_MATRIX = False
 FORWARD_PASSES = 100
 BBB = False
 SAVE_DIR = "saved_model"
+W_e = 1
+W_b = 1
 
 if TRAIN_MC_DROPOUT and BBB:
+    print("You broke it")
     exit()
 
 import torch
@@ -34,6 +37,7 @@ import model
 import torch.nn as nn
 from tqdm import tqdm
 import os
+import matplotlib.pyplot as plt
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 image_size = 224
@@ -57,19 +61,28 @@ weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441] #70%
 
 new_weights = []
 sampler_weights = []
+val_weights = []
 k = 0
 q = 1
 for weight in weights:
     new_weights.append(((sum(weights))/weight)**k)
     sampler_weights.append(((sum(weights))/weight)**q)
+    val_weights.append(((sum(weights))/weight)**1)
+    
+    #new_weights.append(1/weight)
+    #sampler_weights.append(1/weight)
+    #val_weights.append(1/weight)
 
-class_weights = torch.Tensor(new_weights)
-sampler_weights = torch.Tensor(sampler_weights)
+class_weights = torch.Tensor(new_weights)/new_weights[1]
+sampler_weights = torch.Tensor(sampler_weights)/new_weights[1]
+val_weights = torch.Tensor(val_weights)/new_weights[1]
 
+val_weights = val_weights.to(device)
 class_weights = class_weights.to(device)
 sampler_weights = sampler_weights.to(device)
 print(class_weights)
 print(sampler_weights)
+print(val_weights)
 
 composed_train = transforms.Compose([
                                 transforms.RandomVerticalFlip(),
@@ -140,12 +153,14 @@ def get_data_sets(plot=False):
         weighted_train_idx.append(weighted_idx)
 
     weighted_train_sampler = WeightedRandomSampler(weights=weighted_train_idx, num_samples=len(weighted_train_idx), replacement=True)
+    #train_sampler = SubsetRandomSampler(train_idx)
     valid_sampler = SubsetRandomSampler(valid_idx)
 
     # Don't shuffle the testing set for MC_DROPOUT
     testing_data = Subset(test_data, test_idx)
 
     training_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=weighted_train_sampler, shuffle=False)
+    #training_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=train_sampler)
     valid_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=valid_sampler)
     testing_set = torch.utils.data.DataLoader(testing_data, batch_size=BATCH_SIZE, shuffle=False)
 
@@ -226,8 +241,8 @@ print(new_weights)"""
 if COST_MATRIX:
     loss_function = nn.CrossEntropyLoss(weight=class_weights, reduction='none')
 else:
-    loss_function = nn.CrossEntropyLoss(weight=class_weights)
-    val_loss_fuinction = nn.CrossEntropyLoss(weight=sampler_weights)
+    loss_function = nn.CrossEntropyLoss(weight=class_weights, reduction='mean')
+    val_loss_fuinction = nn.CrossEntropyLoss(weight=val_weights, reduction='mean')
 
 """
 if UNKNOWN_CLASS:
@@ -303,10 +318,12 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
         for i_batch, sample_batch in enumerate(tqdm(train_set)):
             image_batch = sample_batch['image'].to(device)
             label_batch = sample_batch['label'].to(device)
-
+            
+            
             if BBB:
                 outputs = network(image_batch, labels=label_batch)
                 efficientNet_loss = loss_function(outputs, label_batch)
+                
                 loss = network.BBB_loss + efficientNet_loss
 
             else:
@@ -392,7 +409,7 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
         val_accuracy.append(accuracy)
 
         if TRAIN_MC_DROPOUT:
-            accuracy, val_loss, BBB_val, _ = test(val_set, verbose=verbose, drop_samples=10, dropout=True)
+            accuracy, val_loss, BBB_val, _ = test(val_set, verbose=verbose, drop_samples=1, dropout=True)
             mc_val_losses.append(val_loss)
             mc_val_accuracies.append(accuracy)
         
@@ -480,7 +497,7 @@ def test(testing_set, drop_samples=1, verbose=False, dropout=False):
 
                 if BBB:
                     outputs = network(image_batch, labels=label_batch, sample=True, dropout=dropout)
-                    efficientNet_loss = val_loss_fuinction(outputs, label_batch)
+                    efficientNet_loss = val_loss_fuinction(outputs, label_batch) * W_e
                     loss = network.BBB_loss + efficientNet_loss
 
                 else:
@@ -580,7 +597,7 @@ def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_ac
 
     return val_losses, train_losses, val_accuracies, train_accuracies
 
-
+                       
 def print_metrics(root_dir):
     helper.remove_last_row(costs_sr)
     helper.remove_last_row(costs_mc)
@@ -700,11 +717,37 @@ for i in range(0, 10):
     
     #optim = optimizer.SGD(network.parameters(), lr=0.0001)
     #scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.01, step_size_up=10)
+    #0.02
+    #scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.04, step_size_up=(555 * 10), mode="exp_range", gamma=0.9999)
     
-    optim = optimizer.SGD(network.parameters(), lr=0.00001, momentum=0.75)
-    scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.00001, max_lr=0.01, step_size_up=10)
+
+    if BBB:
+        #for p in list(network.state_dict()):
+        #    print(p)
+
+        BBB_weights = ['hidden_layer.weight_mu', 'hidden_layer.weight_rho', 'hidden_layer.bias_mu', 'hidden_layer.bias_rho',
+                      'hidden_layer2.weight_mu', 'hidden_layer2.weight_rho', 'hidden_layer2.bias_mu', 'hidden_layer2.bias_rho']
+        
+        BBB_parameters = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] in BBB_weights, network.named_parameters()))))
+        base_parameters = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] not in BBB_weights, network.named_parameters()))))
+        
+        
+        
+        optim = optimizer.SGD([
+                {'params': BBB_parameters},
+                {'params': base_parameters, 'lr': 0.0001}
+            ], lr=0.0001, momentum=0.9)
+        
+        scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=[0.0001, 0.0001], max_lr=[0.12, 0.03], step_size_up=(555 * 10), mode="exp_range", gamma=0.9999)
+        #scheduler_BBB = optimizer.lr_scheduler.CyclicLR(optim.param_groups[1], base_lr=0.0001, max_lr=0.01, step_size_up=(555 * 10), mode="triangular2")
+        
+
+    else:
+        optim = optimizer.SGD(network.parameters(), lr=0.0001, momentum=0.9)
+        scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.03, step_size_up=(555 * 10), mode="exp_range", gamma=0.9999)
     
     print(optim)
+    print(scheduler)
     
     ROOT_SAVE_DIR = f"saved_models"
     #ROOT_SAVE_DIR = f"test_models"

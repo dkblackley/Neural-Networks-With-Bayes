@@ -19,7 +19,7 @@ class Classifier(nn.Module):
     """
     Class that holds and runs the efficientnet CNN
     """
-    def __init__(self, image_size, output_size, class_weights, device, hidden_size=512, hidden_size2=512, hidden_size3=512, dropout=0.5, BBB=False):
+    def __init__(self, image_size, output_size, class_weights, device, hidden_size=512, hidden_size2=128, hidden_size3=400, dropout=0.5, BBB=False):
         """
         init function sets the type of efficientnet and any extra layers
         :param dropout: rate for dropout
@@ -70,7 +70,7 @@ class Classifier(nn.Module):
         :param dropout: bool for whether or not dropout should be applied
         :return: processed output
         """
-        
+
 
         output = self.extract_efficientNet(input)
         
@@ -87,6 +87,7 @@ class Classifier(nn.Module):
         else:"""
         
         output = self.pass_through_layers(output, labels=labels, sample=sample, drop_rate=drop_rate, drop_samples=drop_samples, dropout=dropout)
+
 
         return output
 
@@ -164,7 +165,7 @@ class Classifier(nn.Module):
     def log_variational_posterior(self):
         return self.hidden_layer.log_variational_posterior + self.hidden_layer2.log_variational_posterior# + self.hidden_layer3.log_variational_posterior
 
-    def sample_elbo(self, input, target, samples=10, n_classes=8):
+    def sample_elbo(self, input, target, samples=1, n_classes=8):
         
         num_batches = 555
         batch_size = input.size()[0]
@@ -184,7 +185,7 @@ class Classifier(nn.Module):
         negative_log_likelihood = TF.cross_entropy(outputs.mean(0), target, weight=self.class_weights, reduction='sum')
 
         KL_divergence = (log_variational_posterior - log_prior)
-        loss = KL_divergence / num_batches + negative_log_likelihood
+        loss = KL_divergence / num_batches # + negative_log_likelihood
 
 
         #loss = loss/batch_size
