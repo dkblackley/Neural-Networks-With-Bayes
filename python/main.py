@@ -603,61 +603,92 @@ def print_metrics(root_dir):
     helper.remove_last_row(costs_mc)
     helper.remove_last_row(costs_BBB)
 
-    data_plot.plot_risk_coverage([predictions_mc, predictions_softmax, predictions_BBB], root_dir, "Risk Coverage")
+    data_plot.plot_each_mc_true_cost(costs_sr, root_dir, "saved_models/Classifier_0/best_mc_loss/",
+                                     "saved_models/BBB_Classifier_0/best_BBB_loss/", "Test cost by forward pass")
 
-    data_plot.plot_true_cost_coverage_by_class([costs_mc, costs_sr, costs_BBB], root_dir,
+    data_plot.plot_each_mc_pass("saved_models/Classifier_0/best_mc_loss/",
+                                "saved_models/BBB_Classifier_0/best_BBB_loss/", predictions_softmax, test_indexes,
+                                test_data, root_dir, "Accuracies by Forward Pass", cost_matrix=False)
+
+    predictions = [predictions_softmax, predictions_mc, predictions_BBB]
+    costs = [costs_sr, costs_mc, costs_BBB]
+
+    data_plot.plot_true_cost_coverage_by_class(costs, root_dir,
                                                "Average Test cost by Classes using LEC")
-    data_plot.plot_true_cost_coverage([costs_mc, costs_sr], root_dir, "Coverage by Average Test cost", uncertainty=False)
+    data_plot.plot_true_cost_coverage(costs, root_dir, "Coverage by Average Test cost", uncertainty=False)
 
-    data_plot.plot_true_cost_coverage_by_class([predictions_mc, predictions_softmax], root_dir,
+    data_plot.plot_true_cost_coverage_by_class(predictions, root_dir,
                                                "Average Test cost by Classes using raw Probabilities with Flattened Matrix",
                                                costs=False, flatten=True)
 
-    data_plot.plot_true_cost_coverage_by_class([costs_mc, costs_sr], root_dir,
+    data_plot.plot_true_cost_coverage_by_class(costs, root_dir,
                                       "Average Test cost by Classes using LEC")
 
-    data_plot.plot_true_cost_coverage_by_class([predictions_mc, predictions_softmax], root_dir,
+    data_plot.plot_true_cost_coverage_by_class(predictions, root_dir,
                                                "Average Test cost by Classes using raw Probabilities", costs=False)
 
 
 
-    data_plot.plot_true_cost_coverage([predictions_mc, predictions_softmax], root_dir,
+    data_plot.plot_true_cost_coverage(predictions, root_dir,
                                       "Average Test cost using Raw Probabilities with Flattened Matrix", costs=False, flatten=True, uncertainty=True)
-    data_plot.plot_true_cost_coverage([predictions_mc, predictions_softmax], root_dir,
+    data_plot.plot_true_cost_coverage(predictions, root_dir,
                                       "Average Test cost using Raw Probabilities", costs=False)
-    data_plot.plot_true_cost_coverage([costs_mc, costs_sr], root_dir, "Average Test cost using LEC")
+    data_plot.plot_true_cost_coverage(costs, root_dir, "Average Test cost using LEC")
 
-    data_plot.plot_cost_coverage([costs_mc, costs_sr], root_dir, "Coverage by Lowest Expected cost")
+    data_plot.plot_cost_coverage(costs, root_dir, "Coverage by Lowest Expected cost")
 
     data_plot.count_sampels_in_intervals(predictions_mc, root_dir, "Number of Samples in each Interval MC Dropout", 5)
     data_plot.count_sampels_in_intervals(predictions_mc, root_dir, "Number of Samples in each Interval MC Dropout (Without probabilites below 0.2)", 5, skip_first=True)
+
     data_plot.count_sampels_in_intervals(predictions_softmax, root_dir, "Number of Samples in each Interval Softmax", 5)
-    data_plot.count_sampels_in_intervals(predictions_softmax, root_dir, "Number of Samples in each Interval Softmax (Without probabilites below 0.2)", 5, skip_first=True)
+    data_plot.count_sampels_in_intervals(predictions_softmax, root_dir,
+                                         "Number of Samples in each Interval Softmax (Without probabilites below 0.2)",
+                                         5, skip_first=True)
+
+    data_plot.count_sampels_in_intervals(predictions_BBB, root_dir, "Number of Samples in each Interval BbB", 5)
+    data_plot.count_sampels_in_intervals(predictions_BBB, root_dir,
+                                         "Number of Samples in each Interval BbB (Without probabilites below 0.2)",
+                                         5, skip_first=True)
 
 
     data_plot.plot_calibration(predictions_mc, "MC Dropout Reliability Diagram", root_dir, 5)
     data_plot.plot_calibration(predictions_softmax, "Softmax Reliability Diagram", root_dir, 5)
+    data_plot.plot_calibration(predictions_BBB, "BbB Reliability Diagram", root_dir, 5)
 
     costs_with_entropy_mc = helper.attach_last_row(costs_mc, predictions_mc)
     costs_with_entropy_sr = helper.attach_last_row(costs_sr, predictions_softmax)
-    data_plot.plot_cost_coverage([costs_with_entropy_mc, costs_with_entropy_sr], root_dir, "Risk Coverage by Uncertainty", uncertainty=False)
+    costs_with_entropy_BBB = helper.attach_last_row(costs_BBB, predictions_BBB)
 
-    correct_mc, incorrect_mc, uncertain_mc = helper.get_correct_incorrect(predictions_mc, test_data, test_indexes, TEST_COST_MATRIX)
+    costs_with_entropy = [costs_with_entropy_sr, costs_with_entropy_mc, costs_with_entropy_BBB]
+
+    data_plot.plot_cost_coverage(costs_with_entropy, root_dir, "Risk Coverage by Uncertainty", uncertainty=False)
+
+    data_plot.plot_risk_coverage(predictions, root_dir, "Risk Coverage")
+
+    correct_mc, incorrect_mc, uncertain_mc = helper.get_correct_incorrect(predictions_mc, test_data, test_indexes,
+                                                                          TEST_COST_MATRIX)
     print(f"MC Accuracy: {len(correct_mc)/(len(correct_mc) + len(incorrect_mc)) * 100}")
 
-    correct_sr, incorrect_sr, uncertain_sr = helper.get_correct_incorrect(predictions_softmax, test_data, test_indexes, TEST_COST_MATRIX)
+    correct_sr, incorrect_sr, uncertain_sr = helper.get_correct_incorrect(predictions_softmax, test_data, test_indexes,
+                                                                          TEST_COST_MATRIX)
     print(f"SM Accuracy: {len(correct_sr) / (len(correct_sr) + len(incorrect_sr)) * 100}")
 
-    data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, root_dir, "MC Dropout Variance by class", by_class=True, prediction_index=0)
-    data_plot.plot_correct_incorrect_uncertainties(correct_sr, incorrect_sr, root_dir, "Softmax Response Variance by class", by_class=True, prediction_index=0)
+    correct_BBB, incorrect_BBB, uncertain_BBB = helper.get_correct_incorrect(predictions_BBB, test_data, test_indexes,
+                                                                          TEST_COST_MATRIX)
+    print(f"BbB Accuracy: {len(correct_BBB) / (len(correct_BBB) + len(incorrect_BBB)) * 100}")
 
-    data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, root_dir, "MC Dropout Variance across predictions")
+    data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, root_dir, "MC Dropout Entropy by class", by_class=True, prediction_index=0)
+    data_plot.plot_correct_incorrect_uncertainties(correct_sr, incorrect_sr, root_dir, "Softmax Response Variance by class", by_class=True, prediction_index=0)
+    data_plot.plot_correct_incorrect_uncertainties(correct_BBB, incorrect_BBB, root_dir, "BbB Entropy by class", by_class=True, prediction_index=0)
+
+    data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, root_dir, "MC Dropout Entropy across predictions")
     data_plot.plot_correct_incorrect_uncertainties(correct_sr, incorrect_sr, root_dir, "Softmax Response Entropies across predictions")
+    data_plot.plot_correct_incorrect_uncertainties(correct_BBB, incorrect_BBB, root_dir, "BbB Response Entropies across predictions")
 
     data_plot.average_uncertainty_by_class(correct_mc, incorrect_mc, root_dir, "MC Dropout Accuracies by Prediction")
     data_plot.average_uncertainty_by_class(correct_sr, incorrect_sr, root_dir, "Softmax Response Accuracies by Prediction")
+    data_plot.average_uncertainty_by_class(correct_BBB, incorrect_BBB, root_dir, "BbB Accuracies by Prediction")
 
-    data_plot.plot_risk_coverage([predictions_mc, predictions_softmax], root_dir, "Risk Coverage")
 
     confusion_matrix = helper.make_confusion_matrix(predictions_softmax, test_data, test_indexes, True)
     data_plot.plot_confusion(confusion_matrix, root_dir, "Softmax Response on Test Set with Cost matrix")
@@ -678,6 +709,16 @@ def print_metrics(root_dir):
     data_plot.plot_confusion(confusion_matrix, root_dir, "MC dropout Test Set without Cost matrix")
     confusion_matrix = helper.confusion_array(confusion_matrix, dimension=1)
     data_plot.plot_confusion(confusion_matrix, root_dir, "MC dropout Test Set Normalized without Cost matrix")
+
+    confusion_matrix = helper.make_confusion_matrix(predictions_BBB, test_data, test_indexes, True)
+    data_plot.plot_confusion(confusion_matrix, root_dir, "BbB Response on Test Set with Cost matrix")
+    confusion_matrix = helper.confusion_array(confusion_matrix, dimension=1)
+    data_plot.plot_confusion(confusion_matrix, root_dir, "BbB Response Test Set Normalized with Cost matrix")
+
+    confusion_matrix = helper.make_confusion_matrix(predictions_BBB, test_data, test_indexes, False)
+    data_plot.plot_confusion(confusion_matrix, root_dir, "BbB Response on Test Set without Cost matrix")
+    confusion_matrix = helper.confusion_array(confusion_matrix, dimension=1)
+    data_plot.plot_confusion(confusion_matrix, root_dir, "BbB Response Test Set Normalized without Cost matrix")
 
 
 #helper.find_lowest_cost([0.02939715244487161, 0.02633606596558821, 0.00489231509944943, 0.8639416721463203])
@@ -708,7 +749,7 @@ def print_metrics(root_dir):
 if not os.path.exists("saved_models/"):
     os.mkdir("saved_models/")
 
-for i in range(0, 10):
+for i in range(0, 0):
     
     network = model.Classifier(image_size, 8, class_weights, device, dropout=0.5, BBB=BBB)
     network.to(device)
@@ -860,7 +901,13 @@ predictions_softmax = helper.string_to_float(predictions_softmax)
 costs_sr = helper.string_to_float(costs_sr)
 predictions_mc = helper.string_to_float(predictions_mc)
 costs_mc = helper.string_to_float(costs_mc)
+predictions_BBB = helper.string_to_float(predictions_BBB)
+costs_BBB = helper.string_to_float(costs_BBB)
 
+SAVE_DIR = "saved_models/images/"
+
+if not os.path.exists(SAVE_DIR):
+    os.mkdir(SAVE_DIR)
 
 print_metrics(SAVE_DIR)
 

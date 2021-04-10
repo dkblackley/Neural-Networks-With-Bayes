@@ -483,8 +483,6 @@ def find_true_cost(prediction, answer, num_classes=8, uncertain=False, flatten=F
                    [10, 20, 1, 1, 20, 20, 0, 10],
                    [1, 150, 10, 10, 150, 150, 10, 0]]
 
-    if prediction == 9:
-        print("HERE")
 
     if uncertain:
         if not flatten:

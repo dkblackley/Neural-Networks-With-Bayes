@@ -84,7 +84,7 @@ class data_set(Dataset):
         answers = []
 
         for i in range(0, len(test_indexes)):
-            answers.append(self.get_class_name(self.labels[i][1:-1]))
+            answers.append(self.get_class_name(self.labels[test_indexes[i]][1:-1]))
 
         return answers
 

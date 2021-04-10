@@ -26,6 +26,11 @@ class DataPlotting:
     def __init__(self, unknown, data_loader, test_indexes):
         self.data_loader = data_loader
         self.test_indexes = test_indexes
+
+        self.colours = ['#1B2ACC', '#CC4F1B', '#228B22']
+        self.edge_colours = ['#1B2ACC', '#CC4F1B', '#228B22']
+        self.labels = ["Softmax response", "MC Dropout", "BBB"]
+
         if unknown:
             self.LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'UNK'}
         else:
@@ -297,6 +302,7 @@ class DataPlotting:
                 total = 0
                 correct = 0
                 for k in range(0, len(predictions[c])):
+                    predic = predictions[c][k].argmax()
                     if predictions[c][k].argmax() == answers[c][k]:
                         total += 1
                         correct += 1
@@ -312,16 +318,17 @@ class DataPlotting:
 
         coverage.reverse()
 
-        dropout_AUC = round(metrics.auc(coverage, accuracies[0]), 3)
-        softmax_AUC = round(metrics.auc(coverage, accuracies[1]), 3)
+        softmax_AUC = round(metrics.auc(coverage, accuracies[0]), 3)
+        dropout_AUC = round(metrics.auc(coverage, accuracies[1]), 3)
         BBB_AUC = round(metrics.auc(coverage, accuracies[2]), 3)
 
         plt.plot(coverage, accuracies[0], label="Softmax response")
         plt.plot(coverage, accuracies[1], label="MC Dropout")
         plt.plot(coverage, accuracies[2], label="BbB")
         plt.title(title)
+        #plt.ylim(0.7, 1.1)
         plt.xlabel("Coverage")
-        plt.ylabel("100 - Accuracy")
+        plt.ylabel("Accuracy")
         plt.legend(loc='best')
         """txt_string = '\n'.join((
             f'Softmax Response AUC: {softmax_AUC}',
@@ -386,28 +393,29 @@ class DataPlotting:
         coverage.reverse()
 
 
-        dropout_AUC = round(metrics.auc(coverage, average_cost[0]), 3)
-        softmax_AUC = round(metrics.auc(coverage, average_cost[1]), 3)
+        #dropout_AUC = round(metrics.auc(coverage, average_cost[0]), 3)
+        #softmax_AUC = round(metrics.auc(coverage, average_cost[1]), 3)
 
-        plt.plot(coverage, average_cost[1], label="MC Dropout")
         plt.plot(coverage, average_cost[0], label="Softmax response")
+        plt.plot(coverage, average_cost[1], label="MC Dropout")
+        plt.plot(coverage, average_cost[2], label="BbB")
         plt.ylim(bottom=0)
         plt.xlim(left=0)
         plt.title(title)
         plt.xlabel("Coverage")
         plt.ylabel("Average LEC")
         plt.legend(loc='best')
-        txt_string = '\n'.join((
+        """txt_string = '\n'.join((
             f'SR AUC: {softmax_AUC}',
             f'MC Dropout AUC: {dropout_AUC}'
-        ))
-        props = dict(boxstyle='round', fc='white', alpha=0.5)
-        plt.text(5, 0.6, txt_string, bbox=props, fontsize=10)
+        ))"""
+        #props = dict(boxstyle='round', fc='white', alpha=0.5)
+        #plt.text(5, 0.6, txt_string, bbox=props, fontsize=10)
 
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
-    def plot_true_cost_coverage(self, preds, root_dir, title, uncertainty=False, costs=True, n_classes=8, flatten=False):
+    def plot_true_cost_coverage(self, predictions, root_dir, title, uncertainty=False, costs=True, n_classes=8, flatten=False):
         """
         Plots test cost by coverage, using either the LEC as a prediction or raw probabilities
         :param preds: the list of predictions
@@ -424,17 +432,18 @@ class DataPlotting:
         values = []
         averages = []
         new_preds = []
+        preds = []
 
 
-        for i in range(0, len(preds)):
-
+        for i in range(0, len(predictions)):
+            preds.append([])
             if not uncertainty and not costs:
-                new_pred = deepcopy(preds[i])
+                new_pred = deepcopy(predictions[i])
                 for p in new_pred:
                     p.pop()
                 preds[i] = np.array(new_pred)
             else:
-                preds[i] = np.array(preds[i])
+                preds[i] = np.array(predictions[i])
             values.append([])
             averages.append([])
             new_preds.append([])
@@ -485,8 +494,9 @@ class DataPlotting:
                     averages[c].append(sum(values[c]) / len(values[c]))
 
         coverage.reverse()
-        plt.plot(coverage, averages[0], label="MC Dropout")
-        plt.plot(coverage, averages[1], label="Softmax response")
+        plt.plot(coverage, averages[0], label="Softmax Response")
+        plt.plot(coverage, averages[1], label="MC Dropout")
+        plt.plot(coverage, averages[2], label="BbB")
         plt.title(title)
         plt.xlabel("Coverage")
         plt.ylabel("Average Test Cost")
@@ -495,7 +505,7 @@ class DataPlotting:
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
-    def plot_true_cost_coverage_by_class(self, preds, root_dir, title, costs=True, n_classes=8, flatten=False):
+    def plot_true_cost_coverage_by_class(self, predictions, root_dir, title, costs=True, n_classes=8, flatten=False):
         """
         Plots the test cost coverage by class, cycles over each classification and finds the average test cost of all
         classifications, then removes the highest LEC or lowest probability and re-gets the Average test cost. continues
@@ -511,21 +521,25 @@ class DataPlotting:
 
         # Hold the entropy/uncertainty metrics
         preds_copy = []
+        preds = []
+
+        for i in range(0, len(predictions)):
+            preds.append([])
 
         # Remove the uncertainty estimation from the raw probabilities and changes the array to numpy arrays
         if not costs:
-            for i in range(0, len(preds)):
-                preds_copy.append(deepcopy(preds[i]))
+            for i in range(0, len(predictions)):
+                preds_copy.append(deepcopy(predictions[i]))
 
-                for c in range(0, len(preds[i])):
+                for c in range(0, len(predictions[i])):
                     preds_copy[i][c].pop()
 
                 preds[i] = np.array(preds_copy[i])
 
         else:
 
-            for i in range(0, len(preds)):
-                preds[i] = np.array(preds[i])
+            for i in range(0, len(predictions)):
+                preds[i] = np.array(predictions[i])
 
         results = []
         results_average = []
@@ -614,8 +628,8 @@ class DataPlotting:
 
         for idx, a in enumerate(axs):
 
-            a.plot(coverage[self.LABELS[idx]], results_average[0][self.LABELS[idx]], label="MC Dropout")
-            a.plot(coverage[self.LABELS[idx]], results_average[1][self.LABELS[idx]], label="Softmax Response")
+            a.plot(coverage[self.LABELS[idx]], results_average[0][self.LABELS[idx]], label="Softmax Response")
+            a.plot(coverage[self.LABELS[idx]], results_average[1][self.LABELS[idx]], label="MC Dropout")
             a.plot(coverage[self.LABELS[idx]], results_average[2][self.LABELS[idx]], label="BbB")
             a.set_title(titles[idx])
 
@@ -759,50 +773,58 @@ class DataPlotting:
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
-    def plot_each_mc_pass(self, mc_dir, predictions_softmax, test_indexes, test_data, save_dir, title, uncertainty, cost_matrix=False):
+    def plot_each_mc_pass(self, mc_dir, BBB_dir, predictions_softmax, test_indexes, test_data, save_dir, title, cost_matrix=False):
 
-        mc_accuracies = []
-        sm_accuracies = []
+        accuracies = [[], [], []]
 
-        pos_avg_entropies_mc = []
-        neg_avg_entropies_mc = []
-        pos_avg_entropies_sm = []
-        neg_avg_entropies_sm = []
+        pos_avg_entropies = [[], [], []]
+        neg_avg_entropies = [[], [], []]
+
 
         for i in tqdm(range(0, 100)):
-            current_mc_predictions = helper.read_rows(mc_dir + uncertainty + '/' + f"mc_forward_pass_{i}_" + "entropy" + ".csv")
+            current_mc_predictions = helper.read_rows(mc_dir + f"entropy/mc_forward_pass_{i}_" + "entropy" + ".csv")
             current_mc_predictions = helper.string_to_float(current_mc_predictions)
 
-            entropies_sm = []
-            entropies_mc = []
+            current_BBB_predictions = helper.read_rows(BBB_dir + f"entropy/BBB_forward_pass_{i}_" + "entropy" + ".csv")
+            current_BBB_predictions = helper.string_to_float(current_BBB_predictions)
+
+            entropies = [[], [], []]
 
             for c in range(0, len(current_mc_predictions)):
-                entropies_mc.append(current_mc_predictions[c][-1])
-                entropies_sm.append(predictions_softmax[c][-1])
+                entropies[0].append(predictions_softmax[c][-1])
+                entropies[1].append(current_mc_predictions[c][-1])
+                entropies[2].append(current_BBB_predictions[c][-1])
 
-            correct_mc, incorrect_mc, uncertain_mc = helper.get_correct_incorrect(current_mc_predictions, test_data,
+            correct = [[], [], []]
+            incorrect = [[], [], []]
+            uncertain = [[], [], []]
+
+            correct[0], incorrect[0], uncertain[0] = helper.get_correct_incorrect(predictions_softmax, test_data,
+                                                                                  test_indexes, cost_matrix)
+
+            correct[1], incorrect[1], uncertain[1] = helper.get_correct_incorrect(current_mc_predictions, test_data,
                                                                                       test_indexes, cost_matrix)
 
-            correct_sr, incorrect_sr, uncertain_mc = helper.get_correct_incorrect(predictions_softmax, test_data,
-                                                                                      test_indexes,cost_matrix)
+            correct[2], incorrect[2], uncertain[2] = helper.get_correct_incorrect(current_BBB_predictions, test_data,
+                                                                                  test_indexes, cost_matrix)
 
-            sm_accuracies.append((len(correct_sr) / len(test_indexes)) * 100)
-            mc_accuracies.append((len(correct_mc) / len(test_indexes)) * 100)
+            for c in range(0, len(accuracies)):
+                accuracies[c].append((len(correct[c]) / len(test_indexes)) * 100)
 
-            pos_avg_entropies_mc.append((sum(entropies_mc)/len(entropies_mc)) + (len(correct_mc) / len(test_indexes)) * 100)
-            pos_avg_entropies_sm.append((sum(entropies_sm)/len(entropies_sm)) + (len(correct_sr) / len(test_indexes)) * 100)
+                pos_avg_entropies[c].append(
+                    (sum(entropies[c]) / len(entropies[c])) + (len(correct[c]) / len(test_indexes)) * 100)
 
-            neg_avg_entropies_sm.append((sum(entropies_sm) / len(entropies_sm) * -1) + (len(correct_sr) / len(test_indexes)) * 100)
-            neg_avg_entropies_mc.append((sum(entropies_mc)/len(entropies_mc) * -1) + (len(correct_mc) / len(test_indexes)) * 100)
+                neg_avg_entropies[c].append(
+                    (sum(entropies[c]) / len(entropies[c]) * -1) + (len(correct[c]) / len(test_indexes)) * 100)
 
 
         passes = [i for i in range(0, 100)]
-
-        plt.plot(passes, mc_accuracies, color='#1B2ACC', label="MC Dropout")
-        plt.fill_between(passes, pos_avg_entropies_mc, neg_avg_entropies_mc, alpha=0.5, edgecolor='#1B2ACC')
-
-        plt.plot(passes, sm_accuracies, '--', color='#CC4F1B', label="Softmax response")
-        plt.fill_between(passes, pos_avg_entropies_sm, neg_avg_entropies_sm, alpha=0.5, edgecolor='#CC4F1B')
+        for i in range(0, len(accuracies)):
+            if i == 0:
+                plt.plot(passes, accuracies[i], '--', color=self.colours[i], label=self.labels[i])
+            else:
+                plt.plot(passes, accuracies[i], color=self.colours[i], label=self.labels[i])
+            plt.fill_between(passes, pos_avg_entropies[i], neg_avg_entropies[i], alpha=0.5, edgecolor=self.edge_colours[i])
 
         plt.legend(loc='lower right')
         plt.xlabel("Forward Passes")
@@ -811,66 +833,51 @@ class DataPlotting:
         plt.savefig(f"{save_dir + title}.png")
         plt.show()
 
-    def plot_each_mc_true_cost(self, predictions_softmax, save_dir, title, uncertainty=False):
+    def plot_each_mc_true_cost(self, costs_softmax, save_dir, mc_dir, BBB_dir, title):
 
-        costs = [[], [], []]
+        avg_costs = [[], [], []]
+        passes = []
 
-        entropies = [[], [], []]
-
-        pos_avg_entropies = [[], [], []]
-        neg_avg_entropies = [[], [], []]
-
-        cost_softmax = helper.read_rows(save_dir + "softmax_costs.csv")
-        if uncertainty:
-            cost_softmax = helper.attach_last_row(cost_softmax, predictions_softmax)
-        cost_softmax = helper.string_to_float(cost_softmax)
-
-        for i in range(0, len(cost_softmax)):
-            entropies[0].append(cost_softmax[i].pop())
+        costs_softmax = deepcopy(costs_softmax)
 
         total = 0
         for i in range(0, len(self.test_indexes)):
             true_label = self.data_loader.get_label(self.test_indexes[i])
-            total += helper.find_true_cost(np.argmin(cost_softmax[i]), true_label, uncertain=uncertainty)
-
-        costs[0].append(total/len(cost_softmax))
+            total += helper.find_true_cost(np.argmin(costs_softmax[i]), true_label)
+        sr_avg_cost = total/len(costs_softmax)
 
         for i in tqdm(range(0, 100)):
-            current_mc_predictions = helper.read_rows(save_dir + f"entropy/mc_forward_pass_{i}_entropy.csv")
-            current_mc_costs = helper.read_rows(save_dir + f"costs/mc_forward_pass_{i}_costs.csv")
-            if uncertainty:
-                current_mc_costs = helper.attach_last_row(current_mc_costs, current_mc_predictions)
-            current_mc_costs = helper.string_to_float(current_mc_costs)
+            current_costs = [[], []]
 
+            current_costs[0] = helper.read_rows(mc_dir + f"costs/mc_forward_pass_{i}_costs.csv")
+            helper.remove_last_row(current_costs[0])
+            current_costs[0] = helper.string_to_float(current_costs[0])
 
-            for c in range(0, len(current_mc_predictions)):
-                entropies[1].append(current_mc_costs[c].pop())
+            current_costs[1] = helper.read_rows(BBB_dir + f"costs/BBB_forward_pass_{i}_costs.csv")
+            helper.remove_last_row(current_costs[1])
+            current_costs[1] = helper.string_to_float(current_costs[1])
 
+            passes.append(i)
+            avg_costs[0].append(sr_avg_cost)
 
-            total = 0
-            for i in range(0, len(self.test_indexes)):
-                true_label = self.data_loader.get_label(self.test_indexes[i])
-                total += helper.find_true_cost(np.argmin(current_mc_costs[i]), true_label, uncertain=uncertainty)
+            for c in range(0, len(current_costs)):
 
-            average_lowest_cost_mc = total/len(current_mc_costs)
+                total = 0
 
-            costs[1].append(average_lowest_cost_mc)
+                for i in range(0, len(self.test_indexes)):
+                    true_label = self.data_loader.get_label(self.test_indexes[i])
+                    total += helper.find_true_cost(np.argmin(current_costs[c][i]), true_label)
 
-            if uncertainty:
-                pos_avg_entropies[1].append((sum(entropies[1])/len(entropies[1])) + costs[1][-1])
-                pos_avg_entropies[0].append((sum(entropies[0])/len(entropies[0])) + costs[0][-1])
+                avg = total/len(current_costs[c])
+                avg_costs[c + 1].append(avg)
 
-                pos_avg_entropies[1].append((sum(entropies[1])/len(entropies[1]) * -1) + costs[1][-1])
-                pos_avg_entropies[0].append((sum(entropies[0]) / len(entropies[0]) * -1) + costs[0][-1])
+        for i in range(0, len(avg_costs)):
+            if i == 0:
+                plt.plot(passes, avg_costs[i], '--', color=self.colours[i], label=self.labels[i])
+            else:
+                plt.plot(passes, avg_costs[i], color=self.colours[i], label=self.labels[i])
+            #plt.fill_between(passes, pos_avg_entropies_mc, neg_avg_entropies_mc, alpha=0.5, edgecolor='#1B2ACC')
 
-
-        passes = [i for i in range(0, 100)]
-
-        plt.plot(passes, costs[1], color='#1B2ACC', label="MC Dropout")
-        #plt.fill_between(passes, pos_avg_entropies_mc, neg_avg_entropies_mc, alpha=0.5, edgecolor='#1B2ACC')
-
-        plt.plot(passes, costs[0], '--', color='#CC4F1B', label="Softmax response")
-        #plt.fill_between(passes, pos_avg_entropies_sm, neg_avg_entropies_sm, alpha=0.5, edgecolor='#CC4F1B')
 
         plt.legend(loc='lower right')
         plt.xlabel("Forward Passes")
