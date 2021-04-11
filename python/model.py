@@ -107,7 +107,7 @@ class Classifier(nn.Module):
         if self.BBB:
             # Don't bother calculating KL Divergence if we're not training
             if self.training or sample:
-                output = self.sample_elbo(input, labels)
+                output = self.sample_elbo(input, labels, samples=drop_samples)
                 return output
             else:
                 output = self.relu(self.bn1(self.hidden_layer(input)))

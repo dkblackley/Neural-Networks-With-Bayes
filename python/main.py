@@ -4,18 +4,18 @@ Deals with things like weight balancing, training and testing methods and
 calling other classes for plotting results of the network
 """
 
-EPOCHS = 100
+EPOCHS = 3
 UNKNOWN_CLASS = False
-DEBUG = False #Toggle this to only run for 1% of the training data
-ENABLE_GPU = True  # Toggle this to enable or disable GPU
+DEBUG = True #Toggle this to only run for 1% of the training data
+ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
-SOFTMAX = True
-MC_DROPOUT = False
-TRAIN_MC_DROPOUT = True
+SOFTMAX = False
+TRAIN_MC_DROPOUT = False
+SAMPLES = 20
 COST_MATRIX = False
 TEST_COST_MATRIX = False
-FORWARD_PASSES = 100
-BBB = False
+FORWARD_PASSES = 3
+BBB = True
 SAVE_DIR = "saved_model"
 W_e = 1
 W_b = 1
@@ -266,7 +266,7 @@ network.relu.register_forward_hook(output_hook)
 activation_penalty = 0.00001"""
 
 
-def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train_accuracy, mc_val_losses, mc_val_accuracies, verbose=False):
+def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train_accuracy, verbose=False):
     """
     trains the network while also recording the accuracy of the network on the training data
     :param verboose: If true dumps out debug info about which classes the network is predicting when correct and incorrect
@@ -283,17 +283,13 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
     best_BBB_loss = 1000000
     if not val_accuracy:
         best_val = 0
-        best_mc_val = 0
     else:
         best_val = max(val_accuracy)
-        best_mc_val = max(val_accuracy)
 
     if not val_losses:
         best_loss = 1000000
-        best_mc_loss = 1000000
     else:
         best_loss = min(val_losses)
-        best_mc_loss = min(val_losses)
 
     for i in range(0, len(val_losses)):
         intervals.append(i)
@@ -321,11 +317,13 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
             
             
             if BBB:
-                outputs = network(image_batch, labels=label_batch)
+                outputs = network(image_batch, labels=label_batch, drop_samples=SAMPLES)
                 efficientNet_loss = loss_function(outputs, label_batch)
-                
                 loss = network.BBB_loss + efficientNet_loss
 
+            elif TRAIN_MC_DROPOUT:
+                outputs = network(image_batch, dropout=True, drop_samples=SAMPLES)
+                loss = loss_function(outputs, label_batch)
             else:
                 outputs = network(image_batch, dropout=True)
                 loss = loss_function(outputs, label_batch)
@@ -408,11 +406,7 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
         BBB_val_losses.append(BBB_val)
         val_accuracy.append(accuracy)
 
-        if TRAIN_MC_DROPOUT:
-            accuracy, val_loss, BBB_val, _ = test(val_set, verbose=verbose, drop_samples=1, dropout=True)
-            mc_val_losses.append(val_loss)
-            mc_val_accuracies.append(accuracy)
-        
+
         if not os.path.isdir(root_dir):
             os.mkdir(root_dir)
 
@@ -432,18 +426,6 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
             data_plot.plot_loss(root_dir + "best_loss/", intervals, val_losses, train_losses)
             data_plot.plot_validation(root_dir + "best_loss/", intervals, val_accuracy, train_accuracy)
 
-        if TRAIN_MC_DROPOUT and best_mc_val < max(mc_val_accuracies):
-            save_network(optim, scheduler, mc_val_losses, train_losses, mc_val_accuracies, train_accuracy, root_dir + "best_mc_model/")
-            best_mc_val = max(mc_val_accuracies)
-            data_plot.plot_loss(root_dir + "best_mc_model/", intervals, mc_val_losses, train_losses)
-            data_plot.plot_validation(root_dir + "best_mc_model/", intervals, mc_val_accuracies, train_accuracy)
-
-        if TRAIN_MC_DROPOUT and best_mc_loss > min(mc_val_losses):
-            save_network(optim, scheduler, mc_val_losses, train_losses, mc_val_accuracies, train_accuracy, root_dir + "best_mc_loss/")
-            best_mc_loss = min(mc_val_losses)
-            data_plot.plot_loss(root_dir + "best_mc_loss/", intervals, mc_val_losses, train_losses)
-            data_plot.plot_validation(root_dir + "best_mc_loss/", intervals, mc_val_accuracies, train_accuracy)
-
         if BBB:
             temp = [e for e in range(0, len(BBB_val_losses))]
             data_plot.plot_loss(root_dir + "BBB_", temp, BBB_val_losses, avg_BBB_losses)
@@ -455,6 +437,7 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
                 best_BBB_loss = min(BBB_val_losses)
                 data_plot.plot_loss(root_dir + "best_BBB_loss/", temp, BBB_val_losses, avg_BBB_losses)
                 data_plot.plot_validation(root_dir + "best_BBB_loss/", temp, val_accuracy, train_accuracy)
+
     data_plot.plot_loss(root_dir, intervals, val_losses, train_losses)
     data_plot.plot_validation(root_dir, intervals, val_accuracy, train_accuracy)
     save_network(optim, scheduler, val_losses, train_losses, val_accuracy, train_accuracy, root_dir)
@@ -496,12 +479,15 @@ def test(testing_set, drop_samples=1, verbose=False, dropout=False):
             with torch.no_grad():
 
                 if BBB:
-                    outputs = network(image_batch, labels=label_batch, sample=True, dropout=dropout)
+                    outputs = network(image_batch, labels=label_batch, sample=True, dropout=dropout, drop_samples=SAMPLES)
                     efficientNet_loss = val_loss_fuinction(outputs, label_batch) * W_e
                     loss = network.BBB_loss + efficientNet_loss
 
+                elif TRAIN_MC_DROPOUT:
+                    outputs = network(image_batch, drop_samples=SAMPLES, dropout=dropout)
+                    loss = val_loss_fuinction(outputs, label_batch)
                 else:
-                    outputs = network(image_batch, drop_samples=drop_samples, dropout=dropout)
+                    outputs = network(image_batch, dropout=dropout)
                     loss = val_loss_fuinction(outputs, label_batch)
                     
             if BBB:
@@ -584,7 +570,7 @@ def load_net(root_dir, output_size):
     return network, optim, scheduler, len(train_losses), val_losses, train_losses, val_accuracies, train_accuracies
 
 
-def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[], train_accuracies=[], mc_val_accuracies=[], mc_val_losses=[]):
+def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[], train_accuracies=[]):
     """
     Trains a network, saving the parameters and the losses/accuracies over time
     :return:
@@ -592,7 +578,6 @@ def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_ac
     starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(root_dir, starting_epoch,
                                                                                        val_losses, train_losses,
                                                                                        val_accuracies, train_accuracies,
-                                                                                       mc_val_accuracies, mc_val_losses,
                                                                                        verbose=True)
 
     return val_losses, train_losses, val_accuracies, train_accuracies
@@ -749,7 +734,7 @@ def print_metrics(root_dir):
 if not os.path.exists("saved_models/"):
     os.mkdir("saved_models/")
 
-for i in range(0, 0):
+for i in range(0, 10):
     
     network = model.Classifier(image_size, 8, class_weights, device, dropout=0.5, BBB=BBB)
     network.to(device)
@@ -799,17 +784,17 @@ for i in range(0, 0):
     
     if BBB:
         ROOT_SAVE_DIR += f"/BBB_Classifier_{i}/"
+    elif TRAIN_MC_DROPOUT:
+        ROOT_SAVE_DIR += f"/MC_Classifier_{i}/"
     else:
-        ROOT_SAVE_DIR += f"/Classifier_{i}/"
-        
+        ROOT_SAVE_DIR += f"/SM_Classifier_{i}/"
+
     train_net(ROOT_SAVE_DIR,
               starting_epoch=0,
               val_losses=[],
               train_losses=[],
               val_accuracies=[],
-              train_accuracies=[],
-              mc_val_losses=[],
-              mc_val_accuracies=[])
+              train_accuracies=[],)
 
     if BBB:
 
@@ -836,7 +821,7 @@ for i in range(0, 0):
 
     if TRAIN_MC_DROPOUT:
 
-        SAVE_DIR = ROOT_SAVE_DIR + "best_mc_loss/"
+        SAVE_DIR = ROOT_SAVE_DIR + "best_loss/"
         network, optim, scheduler, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR,
                                                                                                               8)
 
@@ -859,7 +844,7 @@ for i in range(0, 0):
         predictions_mc = helper.string_to_float(predictions_mc)
         costs_mc = helper.string_to_float(costs_mc)
 
-    if not BBB:
+    if SOFTMAX:
 
         SAVE_DIR = ROOT_SAVE_DIR + "best_loss/"
         network, optim, scheduler, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR,
@@ -882,12 +867,12 @@ for i in range(0, 0):
         costs_sr = helper.string_to_float(costs_sr)
 
 
-SAVE_DIR = "saved_models/Classifier_0/best_mc_loss/"
+SAVE_DIR = "saved_models/MC_Classifier_0/best_loss/"
 
 predictions_mc = helper.read_rows(SAVE_DIR + "mc_entropy_predictions.csv")
 costs_mc = helper.read_rows(SAVE_DIR + "mc_costs.csv")
 
-SAVE_DIR = "saved_models/Classifier_0/best_loss/"
+SAVE_DIR = "saved_models/SM_Classifier_0/best_loss/"
 
 predictions_softmax = helper.read_rows(SAVE_DIR + "softmax_predictions.csv")
 costs_sr = helper.read_rows(SAVE_DIR + "softmax_costs.csv")

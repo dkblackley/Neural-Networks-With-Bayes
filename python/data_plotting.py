@@ -881,7 +881,7 @@ class DataPlotting:
 
         plt.legend(loc='lower right')
         plt.xlabel("Forward Passes")
-        plt.ylabel("Average lowest expected cost")
+        plt.ylabel("Average Test cost")
         plt.title(title)
         plt.savefig(f"{save_dir + title}.png")
         plt.show()
