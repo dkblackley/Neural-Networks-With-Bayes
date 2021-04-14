@@ -14,8 +14,6 @@ from copy import deepcopy
 from sklearn import metrics
 import numpy as np
 
-# LABELS = {'MEL': 0, 'NV': 1, 'BCC': 2, 'AK': 3, 'BKL': 4, 'DF': 5, 'VASC': 6, 'SCC': 7}
-
 
 class DataPlotting:
     """
@@ -23,7 +21,7 @@ class DataPlotting:
     confusion matrices
     """
 
-    def __init__(self, unknown, data_loader, test_indexes):
+    def __init__(self, data_loader, test_indexes):
         self.data_loader = data_loader
         self.test_indexes = test_indexes
 
@@ -31,10 +29,7 @@ class DataPlotting:
         self.edge_colours = ['#1B2ACC', '#CC4F1B', '#228B22']
         self.labels = ["Softmax response", "MC Dropout", "BBB"]
 
-        if unknown:
-            self.LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'UNK'}
-        else:
-            self.LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
+        self.LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
 
     def show_data(self, data):
         """

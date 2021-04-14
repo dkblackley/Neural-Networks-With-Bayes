@@ -4,49 +4,36 @@ Deals with things like weight balancing, training and testing methods and
 calling other classes for plotting results of the network
 """
 
+# Global Variables
 EPOCHS = 3
-UNKNOWN_CLASS = False
-DEBUG = True #Toggle this to only run for 1% of the training data
+DEBUG = True # Toggle this to only run for 1% of the training data
 ENABLE_GPU = False  # Toggle this to enable or disable GPU
 BATCH_SIZE = 32
-SOFTMAX = False
+SOFTMAX = True
 TRAIN_MC_DROPOUT = False
-SAMPLES = 20
-COST_MATRIX = False
-TEST_COST_MATRIX = False
+SAMPLES = 3
 FORWARD_PASSES = 3
-BBB = True
-SAVE_DIR = "saved_model"
-W_e = 1
-W_b = 1
-
-if TRAIN_MC_DROPOUT and BBB:
-    print("You broke it")
-    exit()
+BBB = False
+LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
+SAVE_DIR = "saved_models"
 
 import torch
 import torch.optim as optimizer
 from torchvision import transforms
-from torch.utils.data import random_split, SubsetRandomSampler, Subset, WeightedRandomSampler, SequentialSampler
+from torch.utils.data import random_split, SubsetRandomSampler, Subset, WeightedRandomSampler
 import numpy as np
+import torch.nn as nn
+from tqdm import tqdm
+import os
+
+# Import other files
 import data_loading
 import data_plotting
 import testing
 import helper
 import model
-import torch.nn as nn
-from tqdm import tqdm
-import os
-import matplotlib.pyplot as plt
 
-LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 image_size = 224
-test_indexes = []
-test_size = 0
-val_size = 0
-train_size = 0
-best_val = 0
-best_loss = 0
 np.random.seed(1337)
 
 if ENABLE_GPU:
@@ -55,23 +42,20 @@ else:
     device = torch.device("cpu")
 
 
-#weights = [3620, 10297, 2661, 688, 2109, 187, 200, 502] #80%
-weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441] #70%
 
+weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441] # Distribution when using 70% of dataset
 
+# Calculate the weights for the sampler function and loss functions
 new_weights = []
 sampler_weights = []
 val_weights = []
 k = 0
 q = 1
+
 for weight in weights:
     new_weights.append(((sum(weights))/weight)**k)
     sampler_weights.append(((sum(weights))/weight)**q)
     val_weights.append(((sum(weights))/weight)**1)
-    
-    #new_weights.append(1/weight)
-    #sampler_weights.append(1/weight)
-    #val_weights.append(1/weight)
 
 class_weights = torch.Tensor(new_weights)/new_weights[1]
 sampler_weights = torch.Tensor(sampler_weights)/new_weights[1]
@@ -80,9 +64,7 @@ val_weights = torch.Tensor(val_weights)/new_weights[1]
 val_weights = val_weights.to(device)
 class_weights = class_weights.to(device)
 sampler_weights = sampler_weights.to(device)
-print(class_weights)
-print(sampler_weights)
-print(val_weights)
+
 
 composed_train = transforms.Compose([
                                 transforms.RandomVerticalFlip(),
@@ -113,174 +95,69 @@ train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metada
 test_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_test)
 
 def get_data_sets(plot=False):
+    """
+    Splits the data sets into train, test and validation sets
+    :param plot: If true, plot some samples form each set
+    :return: the DataLoader objects, ready to be called from for each set
+    """
 
+    # 70% split to train set, use 2/3rds of the remaining data (20%) for the testing set
+    indices = list(range(len(train_data)))
+    split_train = int(np.floor(0.7 * len(indices)))
+    split_test = int(np.floor(0.6667 * (len(indices) - split_train)))
 
-    if UNKNOWN_CLASS:
-        scc_idx = []
-        print("\nRemoving SCC class from train and validation sets")
-        for i in tqdm(range(0, len(train_data))):
-            if train_data[i]['label'] == 7:
-                scc_idx.append(i)
-
-
-
-        indices = list(range(len(train_data)))
-        indices = [x for x in indices if x not in scc_idx]
-
-        split_train = int(np.floor(0.7 * len(indices)))
-        split_test = int(np.floor(0.6667 * (len(indices) - split_train)))
-
-        temp_idx, train_idx = indices[split_train:], indices[:split_train]
-        valid_idx, test_idx = temp_idx[split_test:], temp_idx[:split_test]
-
-        for i in scc_idx:
-            if i not in test_idx:
-                test_idx.append(i)
-
-    else:
-        indices = list(range(len(train_data)))
-        split_train = int(np.floor(0.7 * len(indices)))
-        split_test = int(np.floor(0.6667 * (len(indices) - split_train)))
-
-        temp_idx, train_idx = indices[split_train:], indices[:split_train]
-        valid_idx, test_idx = temp_idx[split_test:], temp_idx[:split_test]
+    temp_idx, train_idx = indices[split_train:], indices[:split_train]
+    valid_idx, test_idx = temp_idx[split_test:], temp_idx[:split_test]
 
     weighted_train_idx = []
+
     for c in range(0, len(train_idx)):
         label = train_data.get_label(train_idx[c])
         weighted_idx = sampler_weights[label]
-        #weighted_idx = 1
         weighted_train_idx.append(weighted_idx)
 
     weighted_train_sampler = WeightedRandomSampler(weights=weighted_train_idx, num_samples=len(weighted_train_idx), replacement=True)
-    #train_sampler = SubsetRandomSampler(train_idx)
     valid_sampler = SubsetRandomSampler(valid_idx)
 
     # Don't shuffle the testing set for MC_DROPOUT
     testing_data = Subset(test_data, test_idx)
 
     training_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=weighted_train_sampler, shuffle=False)
-    #training_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=train_sampler)
-    valid_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=valid_sampler)
+    valid_set = torch.utils.data.DataLoader(test_data, batch_size=BATCH_SIZE, sampler=valid_sampler)
     testing_set = torch.utils.data.DataLoader(testing_data, batch_size=BATCH_SIZE, shuffle=False)
 
     if plot:
-        data_plot = data_plotting.DataPlotting(UNKNOWN_CLASS, test_data, test_idx)
+
+        data_plot = data_plotting.DataPlotting(test_data, test_idx)
 
         helper.plot_set(training_set, data_plot, 0, 5)
         helper.plot_set(valid_set, data_plot, 0, 5)
         helper.plot_set(testing_set, data_plot, 0, 5)
 
-
-
     return training_set, valid_set, testing_set, len(test_idx), len(train_idx), len(valid_idx), test_idx
 
-train_set, val_set, test_set, test_size, train_size, val_size, test_indexes = get_data_sets(plot=False)
+train_set, val_set, test_set, test_size, train_size, val_size, test_indexes = get_data_sets(plot=True)
 
-data_plot = data_plotting.DataPlotting(UNKNOWN_CLASS, test_data, test_indexes)
-
-#helper.count_classes(train_set, BATCH_SIZE)
-#helper.count_classes(val_set, BATCH_SIZE)
-#helper.count_classes(test_set, BATCH_SIZE)
-
-"""train_names = []
-val_names = []
-test_names = []
-
-
-for i_batch, sample_batch in enumerate(tqdm(train_set)):
-    for name in sample_batch['filename']:
-        train_names.append(name)
-
-for i_batch, sample_batch in enumerate(tqdm(val_set)):
-    for name in sample_batch['filename']:
-        val_names.append(name)
-
-for i_batch, sample_batch in enumerate(tqdm(test_set)):
-    for name in sample_batch['filename']:
-        test_names.append(name)
-
-if bool(set(train_names) & set(val_names)):
-    intersection = set(train_names).intersection(val_names)
-    print(intersection)
-
-if bool(set(test_names) & set(val_names)):
-    intersection = set(test_names).intersection(val_names)
-    print(intersection)
-
-if bool(set(test_names) & set(train_names)):
-    intersection = set(test_names).intersection(train_names)
-    print(intersection)"""
-
-
-"""summed = sum(weights)
-new_weights = 164 / torch.Tensor(weights)
-
-#new_weights = [weight/sum(weights) for weight in weights]
-#print(new_weights)
-
-#new_weights = [1.0 / weight for weight in weights]
-#new_weights = new_weights / sum(new_weights)
-print(new_weights)
-
-new_weights = []
-index = 0
-for weight in weights:
-    if UNKNOWN_CLASS:
-        new_weights.append(sum(weights) / (7 * weight))
-    else:
-        new_weights.append(sum(weights)/(8 * weight))
-    index = index + 1
-
-new_weights = torch.Tensor(new_weights)
-print(new_weights)"""
-#weights = [4522, 12875, 3323, 867, 2624, 239, 253, 628]
-
-#new_weights = helper.apply_cost_matrix()
-
-if COST_MATRIX:
-    loss_function = nn.CrossEntropyLoss(weight=class_weights, reduction='none')
-else:
-    loss_function = nn.CrossEntropyLoss(weight=class_weights, reduction='mean')
-    val_loss_fuinction = nn.CrossEntropyLoss(weight=val_weights, reduction='mean')
-
-"""
-if UNKNOWN_CLASS:
-    network = model.Classifier(image_size, 7, class_weights, device, dropout=0.5, BBB=BBB)
-    network.to(device)
-    weights = [3188, 8985, 2319, 602, 1862, 164, 170]
-else:
-    network = model.Classifier(image_size, 8, class_weights, device, dropout=0.5, BBB=BBB)
-    network.to(device)
-    weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
-
-weights = [3620, 10297, 2661, 688, 2109, 187, 200, 502]
-    
-optim = optimizer.Adam(network.parameters(), lr=0.001, weight_decay=0.001)"""
-
-#weights = list(helper.count_classes(train_set, BATCH_SIZE).values())
-
-
-"""output_hook = model.OutputHook()
-network.relu.register_forward_hook(output_hook)
-activation_penalty = 0.00001"""
-
+data_plot = data_plotting.DataPlotting(test_data, test_indexes)
+loss_function = nn.CrossEntropyLoss(weight=class_weights, reduction='mean')
+val_loss_function = nn.CrossEntropyLoss(weight=val_weights, reduction='mean')
 
 def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train_accuracy, verbose=False):
     """
-    trains the network while also recording the accuracy of the network on the training data
-    :param verboose: If true dumps out debug info about which classes the network is predicting when correct and incorrect
-    :return: returns the number of epochs, a list of the validation set losses per epoch, a list of the
-    training set losses per epoch, a list of the validation accuracy per epoch and the
-    training accuracy per epoch
+    Trains the network, saving the model with the best loss and the best accuracy as it goes.
+    :param root_dir: Directory to save the model to
+    :param current_epoch: The epoch to resume training from
+    :param val_losses: The previous losses on the Validation set
+    :param train_losses: The previous losses on the Training set
+    :param val_accuracy: The previous Accuracies on the Validation set
+    :param train_accuracy: The previous Accuracies on the training set
+    :param verbose: if True, dumps out extra information regarding what the neural network has been predicting on
+    :return: the train and val losses as well as the train and val accuracies
     """
 
-    #input("\nHave you remembered to move the model out of saved model before loading in the best model?")
-
     intervals = []
-    avg_BBB_losses = []
-    BBB_val_losses = []
-    best_BBB_loss = 1000000
+
+    # Set the best accuracy and loss values if none have been passed in.
     if not val_accuracy:
         best_val = 0
     else:
@@ -294,7 +171,7 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
     for i in range(0, len(val_losses)):
         intervals.append(i)
 
-    print("\nTraining Network")
+    print("\nTraining Network...")
 
     for epoch in range(current_epoch, EPOCHS + current_epoch):
 
@@ -302,7 +179,6 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
         network.train()
 
         losses = []
-        BBB_losses = []
         correct = 0
         total = 0
         incorrect = 0
@@ -314,42 +190,18 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
         for i_batch, sample_batch in enumerate(tqdm(train_set)):
             image_batch = sample_batch['image'].to(device)
             label_batch = sample_batch['label'].to(device)
-            
-            
+
+            outputs = network(image_batch, drop_samples=SAMPLES, dropout=True)
+            loss = loss_function(outputs, label_batch)
+
             if BBB:
-                outputs = network(image_batch, labels=label_batch, drop_samples=SAMPLES)
-                efficientNet_loss = loss_function(outputs, label_batch)
-                loss = network.BBB_loss + efficientNet_loss
-
-            elif TRAIN_MC_DROPOUT:
-                outputs = network(image_batch, dropout=True, drop_samples=SAMPLES)
-                loss = loss_function(outputs, label_batch)
-            else:
-                outputs = network(image_batch, dropout=True)
-                loss = loss_function(outputs, label_batch)
-            
-            """activation_cost = 0
-            for output in output_hook:
-                activation_cost += torch.norm(output, 1)
-            activation_cost *= activation_penalty
-            loss += activation_cost"""
-            
-            """L1_reg = torch.tensor(0., requires_grad=True)
-            for name, param in network.named_parameters():
-                if 'weight' in name:
-                    L1_reg = L1_reg + torch.norm(param, 1)
-
-                loss = loss + 0.0001 * L1_reg"""
+                loss += network.BBB_loss
             
             loss.backward()
             optim.step()
             optim.zero_grad()
             scheduler.step()
             percentage = (i_batch / len(train_set)) * 100  # Used for Debugging
-            
-            if BBB:
-                BBB_losses.append(loss.item())
-                loss = efficientNet_loss
 
             losses.append(loss.item())
             index = 0
@@ -368,10 +220,6 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
                     incorrect_count[label] += 1
                     incorrect += 1
                 total += 1
-
-            """if percentage % 10 >= 9.85 and verbose:
-                print("\n")
-                print(loss)"""
 
             if percentage >= 1 and DEBUG:
                 print(loss)
@@ -395,63 +243,48 @@ def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train
 
         intervals.append(epoch + 1)
         train_losses.append(sum(losses) / len(losses))
-        if BBB:
-            avg_BBB_losses.append(sum(BBB_losses) / len(BBB_losses))
+        train_accuracy.append(accuracy)
         print(f"Training loss: {sum(losses) / len(losses)}")
 
-        train_accuracy.append(accuracy)
-
-        accuracy, val_loss, BBB_val, _ = test(val_set, verbose=verbose)
+        accuracy, val_loss = test(val_set, verbose=verbose)
         val_losses.append(val_loss)
-        BBB_val_losses.append(BBB_val)
         val_accuracy.append(accuracy)
-
 
         if not os.path.isdir(root_dir):
             os.mkdir(root_dir)
 
         data_plot.plot_loss(root_dir, intervals, val_losses, train_losses)
         data_plot.plot_validation(root_dir, intervals, val_accuracy, train_accuracy)
-        save_network(optim, scheduler, val_losses, train_losses, val_accuracy, train_accuracy, root_dir)
+        helper.save_network(network, optim, scheduler, val_losses, train_losses, val_accuracy, train_accuracy, root_dir)
 
         if best_val < max(val_accuracy):
-            save_network(optim, scheduler, val_losses, train_losses, val_accuracy, train_accuracy, root_dir + "best_model/")
+            helper.save_network(network, optim, scheduler, val_losses, train_losses, val_accuracy, train_accuracy,
+                         root_dir)
             best_val = max(val_accuracy)
-            data_plot.plot_loss(root_dir + "best_model/", intervals, val_losses, train_losses)
-            data_plot.plot_validation(root_dir + "best_model/", intervals, val_accuracy, train_accuracy)
+            data_plot.plot_loss(root_dir, intervals, val_losses, train_losses)
+            data_plot.plot_validation(root_dir, intervals, val_accuracy, train_accuracy)
 
         if best_loss > min(val_losses):
-            save_network(optim, scheduler, val_losses, train_losses, val_accuracy, train_accuracy, root_dir + "best_loss/")
+            helper.save_network(network, optim, scheduler, val_losses, train_losses, val_accuracy, train_accuracy,
+                         root_dir)
             best_loss = min(val_losses)
-            data_plot.plot_loss(root_dir + "best_loss/", intervals, val_losses, train_losses)
-            data_plot.plot_validation(root_dir + "best_loss/", intervals, val_accuracy, train_accuracy)
-
-        if BBB:
-            temp = [e for e in range(0, len(BBB_val_losses))]
-            data_plot.plot_loss(root_dir + "BBB_", temp, BBB_val_losses, avg_BBB_losses)
-            helper.write_csv(avg_BBB_losses, root_dir + "BBB_train_losses.csv")
-            helper.write_csv(BBB_val_losses, root_dir + "BBB_val_losses.csv")
-            
-            if best_BBB_loss > min(BBB_val_losses):
-                save_network(optim, scheduler, BBB_val_losses, avg_BBB_losses, val_accuracy, train_accuracy, root_dir + "best_BBB_loss/")
-                best_BBB_loss = min(BBB_val_losses)
-                data_plot.plot_loss(root_dir + "best_BBB_loss/", temp, BBB_val_losses, avg_BBB_losses)
-                data_plot.plot_validation(root_dir + "best_BBB_loss/", temp, val_accuracy, train_accuracy)
+            data_plot.plot_loss(root_dir, intervals, val_losses, train_losses)
+            data_plot.plot_validation(root_dir, intervals, val_accuracy, train_accuracy)
 
     data_plot.plot_loss(root_dir, intervals, val_losses, train_losses)
     data_plot.plot_validation(root_dir, intervals, val_accuracy, train_accuracy)
-    save_network(optim, scheduler, val_losses, train_losses, val_accuracy, train_accuracy, root_dir)
+    helper.save_network(network, optim, scheduler, val_losses, train_losses, val_accuracy, train_accuracy, root_dir)
 
     return intervals, val_losses, train_losses, val_accuracy, train_accuracy
 
 
-def test(testing_set, drop_samples=1, verbose=False, dropout=False):
+def test(testing_set, verbose=False):
     """
-    Use to test the network on a given data set
-    :param testing_set: The data set that the network will predict for
-    :param verboose: Dumps out debug data showing which class the network is predicting for
-    :return: accuracy of network on dataset, loss of network and also a confusion matrix in the
-    form of a list of lists
+    Used to test the network on the validation set
+    :param testing_set: The set to be sample from for images and labels
+    :param verbose: If True, prints out extra debug information about how the network is guessing
+    :param dropout: If True, apply dropout at test time
+    :return:
     """
 
     # Make sure network is in eval mode
@@ -463,11 +296,6 @@ def test(testing_set, drop_samples=1, verbose=False, dropout=False):
     correct_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
     incorrect_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
     losses = []
-    BBB_losses = []
-    confusion_matrix = []
-
-    for i in range(8):
-        confusion_matrix.append([0, 0, 0, 0, 0, 0, 0, 0])
 
     print("\nTesting Data...")
 
@@ -476,23 +304,11 @@ def test(testing_set, drop_samples=1, verbose=False, dropout=False):
             image_batch = sample_batch['image'].to(device)
             label_batch = sample_batch['label'].to(device)
 
-            with torch.no_grad():
+            outputs = network(image_batch, drop_samples=SAMPLES, sample=True, dropout=TRAIN_MC_DROPOUT)
+            loss = val_loss_function(outputs, label_batch)
 
-                if BBB:
-                    outputs = network(image_batch, labels=label_batch, sample=True, dropout=dropout, drop_samples=SAMPLES)
-                    efficientNet_loss = val_loss_fuinction(outputs, label_batch) * W_e
-                    loss = network.BBB_loss + efficientNet_loss
-
-                elif TRAIN_MC_DROPOUT:
-                    outputs = network(image_batch, drop_samples=SAMPLES, dropout=dropout)
-                    loss = val_loss_fuinction(outputs, label_batch)
-                else:
-                    outputs = network(image_batch, dropout=dropout)
-                    loss = val_loss_fuinction(outputs, label_batch)
-                    
             if BBB:
-                BBB_losses.append(loss.item())
-                loss = efficientNet_loss
+                loss += network.BBB_loss
 
             losses.append(loss.item())
             index = 0
@@ -500,16 +316,14 @@ def test(testing_set, drop_samples=1, verbose=False, dropout=False):
 
                 answer = torch.argmax(output)
                 real_answer = label_batch[index]
-                confusion_matrix[answer.item()][real_answer.item()] += 1
-                #confusion_matrix[real_answer.item()][answer.item()] += 1
-
                 index += 1
-
                 if answer == real_answer:
+
                     label = LABELS[answer.item()]
                     correct_count[label] += 1
                     correct += 1
                 else:
+
                     label = LABELS[answer.item()]
                     incorrect_count[label] += 1
                     incorrect += 1
@@ -519,13 +333,9 @@ def test(testing_set, drop_samples=1, verbose=False, dropout=False):
                 break
 
     average_loss = (sum(losses) / len(losses))
-    average_BBB = 0
-    if BBB:
-        average_BBB = (sum(BBB_losses) / len(BBB_losses))
     accuracy = (correct / total) * 100
 
     if (verbose):
-
         print("\n Correct Predictions: ")
         for label, count in correct_count.items():
             if correct == 0:
@@ -543,44 +353,16 @@ def test(testing_set, drop_samples=1, verbose=False, dropout=False):
     print(f"Test Accuracy = {accuracy}%")
     print(f"Test Loss = {average_loss}")
 
-    return accuracy, average_loss, average_BBB, confusion_matrix
-
-def save_network(optim, scheduler, val_losses, train_losses, val_accuracies, train_accuracies, root_dir):
-    
-    if not os.path.isdir(root_dir):
-        os.mkdir(root_dir)
-
-    helper.save_net(network, optim, scheduler, root_dir + "model_parameters")
-    helper.write_csv(val_losses, root_dir + "val_losses.csv")
-    helper.write_csv(train_losses, root_dir + "train_losses.csv")
-    helper.write_csv(val_accuracies, root_dir + "val_accuracies.csv")
-    helper.write_csv(train_accuracies, root_dir + "train_accuracies.csv")
+    return accuracy, average_loss
 
 
-def load_net(root_dir, output_size):
-
-    val_losses = helper.read_csv(root_dir + "val_losses.csv")
-    train_losses = helper.read_csv(root_dir + "train_losses.csv")
-    val_accuracies = helper.read_csv(root_dir + "val_accuracies.csv")
-    train_accuracies = helper.read_csv(root_dir + "train_accuracies.csv")
-    network, optim, scheduler = helper.load_net(root_dir + "model_parameters", image_size, output_size, device, class_weights)
-
-    network = network.to(device)
-
-    return network, optim, scheduler, len(train_losses), val_losses, train_losses, val_accuracies, train_accuracies
-
-
-def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[], train_accuracies=[]):
-    """
-    Trains a network, saving the parameters and the losses/accuracies over time
-    :return:
-    """
+"""def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[], train_accuracies=[]):
     starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(root_dir, starting_epoch,
                                                                                        val_losses, train_losses,
                                                                                        val_accuracies, train_accuracies,
                                                                                        verbose=True)
 
-    return val_losses, train_losses, val_accuracies, train_accuracies
+    return val_losses, train_losses, val_accuracies, train_accuracies"""
 
                        
 def print_metrics(root_dir):
@@ -651,15 +433,15 @@ def print_metrics(root_dir):
     data_plot.plot_risk_coverage(predictions, root_dir, "Risk Coverage")
 
     correct_mc, incorrect_mc, uncertain_mc = helper.get_correct_incorrect(predictions_mc, test_data, test_indexes,
-                                                                          TEST_COST_MATRIX)
+                                                                          True)
     print(f"MC Accuracy: {len(correct_mc)/(len(correct_mc) + len(incorrect_mc)) * 100}")
 
     correct_sr, incorrect_sr, uncertain_sr = helper.get_correct_incorrect(predictions_softmax, test_data, test_indexes,
-                                                                          TEST_COST_MATRIX)
+                                                                          True)
     print(f"SM Accuracy: {len(correct_sr) / (len(correct_sr) + len(incorrect_sr)) * 100}")
 
     correct_BBB, incorrect_BBB, uncertain_BBB = helper.get_correct_incorrect(predictions_BBB, test_data, test_indexes,
-                                                                          TEST_COST_MATRIX)
+                                                                          True)
     print(f"BbB Accuracy: {len(correct_BBB) / (len(correct_BBB) + len(incorrect_BBB)) * 100}")
 
     data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, root_dir, "MC Dropout Entropy by class", by_class=True, prediction_index=0)
@@ -706,101 +488,52 @@ def print_metrics(root_dir):
     data_plot.plot_confusion(confusion_matrix, root_dir, "BbB Response Test Set Normalized without Cost matrix")
 
 
-#helper.find_lowest_cost([0.02939715244487161, 0.02633606596558821, 0.00489231509944943, 0.8639416721463203])
-
-#SAVE_DIR = "best_model/"
-#SAVE_DIR = "best_loss/"
-#SAVE_DIR = "saved_models/Classifier 80 EPOCHs/best_model/"
-#SAVE_DIR = "saved_model/"
-
-
-#data_plot.plot_confusion(helper.get_cost_matrix(), SAVE_DIR, "My cost matrix")
-
-#train_net(SAVE_DIR)
-#helper.plot_samples(train_data, data_plot)
-
-#network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR, 8)
-# network, optim, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net("saved_model/", 8)
-
-#test(val_set, verbose=True)
-
-"""train_net(SAVE_DIR,
-          starting_epoch=starting_epoch,
-          val_losses=val_losses,
-          train_losses=train_losses,
-          val_accuracies=val_accuracies,
-          train_accuracies=train_accuracies)"""
-
-if not os.path.exists("saved_models/"):
-    os.mkdir("saved_models/")
-
 for i in range(0, 10):
     
-    network = model.Classifier(image_size, 8, class_weights, device, dropout=0.5, BBB=BBB)
+    network = model.Classifier(image_size, 8, class_weights, device, dropout=0.3, BBB=BBB)
     network.to(device)
-    
-    #optim = optimizer.Adam(network.parameters(), lr=0.001)
-    
-    #optim = optimizer.SGD(network.parameters(), lr=0.0001)
-    #scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.01, step_size_up=10)
-    #0.02
-    #scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.04, step_size_up=(555 * 10), mode="exp_range", gamma=0.9999)
-    
 
     if BBB:
-        #for p in list(network.state_dict()):
-        #    print(p)
 
+        # Set the learning rate to be higher for the Bayesian Layer
         BBB_weights = ['hidden_layer.weight_mu', 'hidden_layer.weight_rho', 'hidden_layer.bias_mu', 'hidden_layer.bias_rho',
                       'hidden_layer2.weight_mu', 'hidden_layer2.weight_rho', 'hidden_layer2.bias_mu', 'hidden_layer2.bias_rho']
         
         BBB_parameters = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] in BBB_weights, network.named_parameters()))))
         base_parameters = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] not in BBB_weights, network.named_parameters()))))
-        
-        
-        
+
         optim = optimizer.SGD([
                 {'params': BBB_parameters},
                 {'params': base_parameters, 'lr': 0.0001}
             ], lr=0.0001, momentum=0.9)
         
         scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=[0.0001, 0.0001], max_lr=[0.12, 0.03], step_size_up=(555 * 10), mode="exp_range", gamma=0.9999)
-        #scheduler_BBB = optimizer.lr_scheduler.CyclicLR(optim.param_groups[1], base_lr=0.0001, max_lr=0.01, step_size_up=(555 * 10), mode="triangular2")
-        
 
     else:
         optim = optimizer.SGD(network.parameters(), lr=0.0001, momentum=0.9)
         scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.03, step_size_up=(555 * 10), mode="exp_range", gamma=0.9999)
+
     
-    print(optim)
-    print(scheduler)
-    
-    ROOT_SAVE_DIR = f"saved_models"
-    #ROOT_SAVE_DIR = f"test_models"
+    ROOT_SAVE_DIR = SAVE_DIR
     
     if not os.path.exists(ROOT_SAVE_DIR):
         os.mkdir(ROOT_SAVE_DIR)
         
     
     if BBB:
-        ROOT_SAVE_DIR += f"/BBB_Classifier_{i}/"
+        SAVE_DIR += f"/BBB_Classifier_{i}/"
     elif TRAIN_MC_DROPOUT:
-        ROOT_SAVE_DIR += f"/MC_Classifier_{i}/"
+        SAVE_DIR += f"/MC_Classifier_{i}/"
     else:
-        ROOT_SAVE_DIR += f"/SM_Classifier_{i}/"
+        SAVE_DIR += f"/SM_Classifier_{i}/"
 
-    train_net(ROOT_SAVE_DIR,
-              starting_epoch=0,
-              val_losses=[],
-              train_losses=[],
-              val_accuracies=[],
-              train_accuracies=[],)
+    starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(SAVE_DIR, 0,
+                                                                                       [], [],
+                                                                                       [], [],
+                                                                                       verbose=True)
 
     if BBB:
-
-        SAVE_DIR = ROOT_SAVE_DIR + "best_BBB_loss/"
-        network, optim, scheduler, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR,
-                                                                                                              8)
+        network, optim, scheduler, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = helper.load_net(SAVE_DIR, 8, image_size, device, class_weights)
 
         if not os.path.exists(SAVE_DIR + "entropy/"):
             os.mkdir(SAVE_DIR + "entropy/")
@@ -815,40 +548,11 @@ for i in range(0, 10):
         helper.write_rows(costs_BBB, SAVE_DIR + "BBB_costs.csv")
 
         costs_BBB = helper.read_rows(SAVE_DIR + "BBB_costs.csv")
-        predictions_BBB = helper.read_rows(SAVE_DIR + "BBB_variance_predictions.csv")
         predictions_BBB = helper.read_rows(SAVE_DIR + "BBB_entropy_predictions.csv")
-
-
-    if TRAIN_MC_DROPOUT:
-
-        SAVE_DIR = ROOT_SAVE_DIR + "best_loss/"
-        network, optim, scheduler, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR,
-                                                                                                              8)
-
-        if not os.path.exists(SAVE_DIR + "entropy/"):
-            os.mkdir(SAVE_DIR + "entropy/")
-            os.mkdir(SAVE_DIR + "variance/")
-            os.mkdir(SAVE_DIR + "costs/")
-
-        predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, SAVE_DIR, network, test_size, device, mc_dropout=True, forward_passes=FORWARD_PASSES)
-        helper.write_rows(predictions_mc_entropy, SAVE_DIR + "mc_entropy_predictions.csv")
-        helper.write_rows(predictions_mc_var, SAVE_DIR + "mc_variance_predictions.csv")
-        helper.write_rows(costs_mc, SAVE_DIR + "mc_costs.csv")
-
-        predictions_mc = helper.read_rows(SAVE_DIR + "mc_entropy_predictions.csv")
-        costs_mc = helper.read_rows(SAVE_DIR + "mc_costs.csv")
-
-        #predictions_mc = helper.read_rows(SAVE_DIR + "mc_entropy_predictions.csv")
-        #predictions_mc = helper.read_rows(SAVE_DIR + "mc_predictions.csv")
-
-        predictions_mc = helper.string_to_float(predictions_mc)
-        costs_mc = helper.string_to_float(costs_mc)
 
     if SOFTMAX:
 
-        SAVE_DIR = ROOT_SAVE_DIR + "best_loss/"
-        network, optim, scheduler, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = load_net(SAVE_DIR,
-                                                                                                              8)
+        network, optim, scheduler, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = helper.load_net(SAVE_DIR, 8, image_size, device, class_weights)
 
         if not os.path.exists(SAVE_DIR + "entropy/"):
             os.mkdir(SAVE_DIR + "entropy/")
@@ -866,13 +570,25 @@ for i in range(0, 10):
         predictions_softmax = helper.string_to_float(predictions_softmax)
         costs_sr = helper.string_to_float(costs_sr)
 
+        predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, SAVE_DIR, network, test_size,
+                                                                               device, mc_dropout=True,
+                                                                               forward_passes=FORWARD_PASSES)
+        helper.write_rows(predictions_mc_entropy, SAVE_DIR + "mc_entropy_predictions.csv")
+        helper.write_rows(predictions_mc_var, SAVE_DIR + "mc_variance_predictions.csv")
+        helper.write_rows(costs_mc, SAVE_DIR + "mc_costs.csv")
 
-SAVE_DIR = "saved_models/MC_Classifier_0/best_loss/"
+        predictions_mc = helper.read_rows(SAVE_DIR + "mc_entropy_predictions.csv")
+        costs_mc = helper.read_rows(SAVE_DIR + "mc_costs.csv")
 
+        predictions_mc = helper.string_to_float(predictions_mc)
+        costs_mc = helper.string_to_float(costs_mc)
+
+
+SAVE_DIR = "saved_models/MC_Classifier_0/"
 predictions_mc = helper.read_rows(SAVE_DIR + "mc_entropy_predictions.csv")
 costs_mc = helper.read_rows(SAVE_DIR + "mc_costs.csv")
 
-SAVE_DIR = "saved_models/SM_Classifier_0/best_loss/"
+SAVE_DIR = "saved_models/SM_Classifier_0/"
 
 predictions_softmax = helper.read_rows(SAVE_DIR + "softmax_predictions.csv")
 costs_sr = helper.read_rows(SAVE_DIR + "softmax_costs.csv")

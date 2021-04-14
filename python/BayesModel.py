@@ -8,7 +8,6 @@ from torch.nn import functional as TF
 class GaussianDistribution():
 
     def __init__(self, mu, rho, device):
-
         self.mu = mu
         self.rho = rho
         self.device = device
@@ -19,8 +18,11 @@ class GaussianDistribution():
         return torch.log1p(torch.exp(self.rho))
 
     def sample_distribution(self):
+        """
+        Reparameterization trick
+        :return: Reparameterized Gaussian
+        """
         e = self.normal.sample(self.rho.size()).to(self.device)
-
         return self.mu + self.sigma * e
 
     def log_prob(self, input):
@@ -31,7 +33,6 @@ class GaussianDistribution():
 
 class ScaleMixtureGaussian():
     def __init__(self, pi, sigma1, sigma2, device):
-
         self.pi = pi
         self.sigma1 = sigma1
         self.sigma2 = sigma2
@@ -40,13 +41,11 @@ class ScaleMixtureGaussian():
         self.gaussian2 = torch.distributions.Normal(torch.tensor(0).to(device), sigma2, validate_args=True)
 
     def log_prob(self, input):
-               
         prob1 = torch.exp(self.gaussian1.log_prob(input))
         prob2 = torch.exp(self.gaussian2.log_prob(input))
         return (torch.log(self.pi * prob1 + (1 - self.pi) * prob2)).sum()
 
 class BayesianLayer(nn.Module):
-
     def __init__(self, in_features, out_features, device):
         super().__init__()
         self.in_features = in_features

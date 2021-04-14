@@ -10,6 +10,7 @@ import csv
 import torch.optim as optimizer
 from copy import deepcopy
 import numpy as np
+import os
 
 
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
@@ -54,7 +55,7 @@ def change_to_device(network, optim, device):
 
     return network, optim
 
-def load_net(PATH, image_size, output_size, device, class_weights):
+def read_net(PATH, image_size, output_size, device, class_weights):
     net = model.Classifier(image_size, output_size, device, class_weights)
     #optim = optimizer.Adam(net.parameters(), lr=0.001)
     optim = optimizer.SGD(net.parameters(), lr=0.00001)
@@ -641,6 +642,28 @@ def make_confusion_matrix(predictions, data_loader, test_indexes, cost_matrix, t
     return confusion_matrix
 
 
+def save_network(network, optim, scheduler, val_losses, train_losses, val_accuracies, train_accuracies, root_dir):
+    if not os.path.isdir(root_dir):
+        os.mkdir(root_dir)
+
+    save_net(network, optim, scheduler, root_dir + "model_parameters")
+    write_csv(val_losses, root_dir + "val_losses.csv")
+    write_csv(train_losses, root_dir + "train_losses.csv")
+    write_csv(val_accuracies, root_dir + "val_accuracies.csv")
+    write_csv(train_accuracies, root_dir + "train_accuracies.csv")
+
+
+def load_net(root_dir, output_size, image_size, device, class_weights):
+    val_losses = read_csv(root_dir + "val_losses.csv")
+    train_losses = read_csv(root_dir + "train_losses.csv")
+    val_accuracies = read_csv(root_dir + "val_accuracies.csv")
+    train_accuracies = read_csv(root_dir + "train_accuracies.csv")
+    network, optim, scheduler = read_net(root_dir + "model_parameters", image_size, output_size, device,
+                                                class_weights)
+
+    network = network.to(device)
+
+    return network, optim, scheduler, len(train_losses), val_losses, train_losses, val_accuracies, train_accuracies
 
 
 
