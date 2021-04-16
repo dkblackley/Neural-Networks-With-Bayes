@@ -13,8 +13,8 @@ SOFTMAX = True
 TRAIN_MC_DROPOUT = False
 SAMPLES = 3
 FORWARD_PASSES = 3
-BBB = False
-LOAD = True
+BBB = True
+LOAD = False
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 SAVE_DIR = "saved_models"
 ISIC_pred = True
@@ -546,7 +546,16 @@ for i in range(0, 1):
             os.mkdir(SAVE_DIR + "variance/")
             os.mkdir(SAVE_DIR + "costs/")
 
-        predictions_BBB_entropy, predictions_BBB_var, costs_BBB = testing.predict(test_set, SAVE_DIR, network,
+        if ISIC_pred:
+             predictions_BBB_entropy, predictions_BBB_var, costs_BBB = testing.predict(ISIC_set, SAVE_DIR, network,
+                                                                                   len(ISIC_data),
+                                                                                   device, mc_dropout=True,
+                                                                                   forward_passes=FORWARD_PASSES,
+                                                                                   ISIC=True)
+             predictions_BBB_entropy.insert(0, ["image", "MEL", "NV", "BCC", "AK", "BKL", "DF", "VASC", "SCC", "UNK"])
+        else:
+
+            predictions_BBB_entropy, predictions_BBB_var, costs_BBB = testing.predict(test_set, SAVE_DIR, network,
                                                                                   test_size, device, BBB=True,
                                                                                   forward_passes=FORWARD_PASSES)
         helper.write_rows(predictions_BBB_entropy, SAVE_DIR + "BBB_entropy_predictions.csv")
@@ -579,9 +588,6 @@ for i in range(0, 1):
         predictions_softmax = helper.read_rows(SAVE_DIR + "softmax_predictions.csv")
         costs_sr = helper.read_rows(SAVE_DIR + "softmax_costs.csv")
 
-        predictions_softmax = helper.string_to_float(predictions_softmax)
-        costs_sr = helper.string_to_float(costs_sr)
-
         if ISIC_pred:
              predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(ISIC_set, SAVE_DIR, network,
                                                                                    len(ISIC_data),
@@ -599,9 +605,6 @@ for i in range(0, 1):
 
         predictions_mc = helper.read_rows(SAVE_DIR + "mc_entropy_predictions.csv")
         costs_mc = helper.read_rows(SAVE_DIR + "mc_costs.csv")
-
-        predictions_mc = helper.string_to_float(predictions_mc)
-        costs_mc = helper.string_to_float(costs_mc)
 
 
 SAVE_DIR = "saved_models/SM_Classifier_0/"
