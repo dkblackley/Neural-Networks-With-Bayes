@@ -197,6 +197,12 @@ def read_rows(filname):
 
     return arrays
 
+def calculate_sens_spec_acc(predictions):
+    TP = 0
+    FN = 0
+    CP = 0
+    CN = 0
+
 
 def float_to_string(arrays):
 
@@ -523,7 +529,7 @@ def test_lowest_cost(probabilities, num_classes=8):
 
     return answer, lowest_cost
 
-def get_each_cost(probabilities, uncertain=False):
+def get_each_cost(probabilities, uncertain=False, bayes=True):
 
     costs = []
 
@@ -548,6 +554,9 @@ def get_each_cost(probabilities, uncertain=False):
             [10, 1, 10, 10, 1, 0, 10, 10],
             [10, 20, 1, 1, 20, 20, 0, 10],
             [1, 150, 10, 10, 150, 150, 10, 0]])
+
+    if bayes:
+        probabilities = apply_bayes(probabilities)
 
     for j in range(0, len(probabilities)):
         total = 0
@@ -665,5 +674,31 @@ def load_net(root_dir, output_size, image_size, device, class_weights):
 
     return network, optim, scheduler, len(train_losses), val_losses, train_losses, val_accuracies, train_accuracies
 
+def get_bayes_preds(predictions, classes=8):
+    predictions = deepcopy(predictions)
+    population = [3188, 8985, 2319, 602, 1862, 164, 170, 441]
+    population = np.true_divide(population, np.sum(population))
+
+    for prediction in predictions:
+        evidence = 0.0
+        for k in range(0, classes):
+            evidence += prediction[k] * population[k]
+        for i in range(0, classes):
+            prediction[i] = prediction[i] * population[i] / evidence
 
 
+    return predictions
+
+def apply_bayes(prediction, classes=8):
+
+    prediction = np.array(prediction)
+    population = np.array([3188, 8985, 2319, 602, 1862, 164, 170, 441])
+    population = np.true_divide(population, np.sum(population))
+
+    evidence = 0
+    for k in range(0, classes):
+        evidence += prediction[k]*population[k]
+    for i in range(0, classes):
+        prediction[i] = prediction[i]*population[i]/evidence
+
+    return prediction

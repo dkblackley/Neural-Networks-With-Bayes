@@ -53,7 +53,10 @@ class data_set(Dataset):
         """
 
         #file_name = self.file_names[index]
-        file_name = self.labels[index][0] + '.jpg'
+        if self.labels is False:
+            file_name = self.file_names[index]
+        else:
+            file_name = self.labels[index][0] + '.jpg'
         full_path = os.path.join(self.train_image_dir, file_name)
         image = Image.open(full_path)
         if self.labels is False:

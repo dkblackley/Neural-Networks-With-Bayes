@@ -19,7 +19,7 @@ class Classifier(nn.Module):
     """
     Class that holds and runs the efficientnet CNN
     """
-    def __init__(self, image_size, output_size, class_weights, device, hidden_size=512, hidden_size2=128, dropout=0.5, BBB=False):
+    def __init__(self, image_size, output_size, class_weights, device, hidden_size=512, dropout=0.5, BBB=False):
         """
         Initialises network parameters
         :param image_size: Input image size, used to calculate output of efficient net layer
@@ -41,7 +41,7 @@ class Classifier(nn.Module):
         self.device = device
         self.relu = torch.nn.ReLU()
         
-        print(f"1: {hidden_size}, 2: {hidden_size2}")
+        print(f"1: {hidden_size}")
 
         with torch.no_grad():
 
@@ -51,16 +51,13 @@ class Classifier(nn.Module):
         # Initialises the classification head for generating predictions.
         if BBB:
             self.hidden_layer = BayesModel.BayesianLayer(encoder_size, hidden_size, device)
-            self.hidden_layer2 = BayesModel.BayesianLayer(hidden_size, hidden_size2, device)
 
         else:
             self.hidden_layer = nn.Linear(encoder_size, hidden_size)
-            self.hidden_layer2 = nn.Linear(hidden_size, hidden_size2)
 
         self.bn1 = nn.BatchNorm1d(num_features=hidden_size)
-        self.bn2 = nn.BatchNorm1d(num_features=hidden_size2)
 
-        self.output_layer = nn.Linear(hidden_size2, output_size)
+        self.output_layer = nn.Linear(hidden_size, output_size)
 
     def forward(self, input, drop_samples=1, sample=False, drop_rate=None, dropout=False):
         """
@@ -106,7 +103,6 @@ class Classifier(nn.Module):
                 return output
             else:
                 output = self.relu(self.bn1(self.hidden_layer(input)))
-                output = self.relu(self.bn2(self.hidden_layer2(output)))
                 
                 return self.output_layer(output)
         outputs = torch.zeros(drop_samples, input.size()[0], self.output_size).to(self.device)
@@ -119,27 +115,21 @@ class Classifier(nn.Module):
             if dropout:
                 output = TF.dropout(output, drop_rate)
 
-            output = self.relu(self.bn2(self.hidden_layer2(output)))
-
-            if dropout:
-                output = TF.dropout(output, drop_rate)
-
             outputs[i] = self.output_layer(output)
         return outputs.mean(0)
 
     # Methods for BbB
     def bayesian_sample(self, input):
         output = self.relu(self.bn1(self.hidden_layer(input)))
-        output = self.relu(self.bn2(self.hidden_layer2(output)))
         output = self.output_layer(output)
 
         return output
     
     def log_prior(self):
-        return self.hidden_layer.log_prior + self.hidden_layer2.log_prior
+        return self.hidden_layer.log_prior
 
     def log_variational_posterior(self):
-        return self.hidden_layer.log_variational_posterior + self.hidden_layer2.log_variational_posterior
+        return self.hidden_layer.log_variational_posterior
 
     def sample_elbo(self, input, samples=1, n_classes=8):
         """

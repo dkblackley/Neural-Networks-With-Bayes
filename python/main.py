@@ -14,8 +14,10 @@ TRAIN_MC_DROPOUT = False
 SAMPLES = 3
 FORWARD_PASSES = 3
 BBB = False
+LOAD = True
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 SAVE_DIR = "saved_models"
+ISIC_pred = True
 
 import torch
 import torch.optim as optimizer
@@ -93,6 +95,7 @@ composed_test = transforms.Compose([
 
 train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_train)
 test_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_test)
+ISIC_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Test_Input",  transforms=composed_test)
 
 def get_data_sets(plot=False):
     """
@@ -125,6 +128,7 @@ def get_data_sets(plot=False):
     training_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, sampler=weighted_train_sampler, shuffle=False)
     valid_set = torch.utils.data.DataLoader(test_data, batch_size=BATCH_SIZE, sampler=valid_sampler)
     testing_set = torch.utils.data.DataLoader(testing_data, batch_size=BATCH_SIZE, shuffle=False)
+    ISIC_set = torch.utils.data.DataLoader(ISIC_data, batch_size=BATCH_SIZE, shuffle=False)
 
     if plot:
 
@@ -133,10 +137,11 @@ def get_data_sets(plot=False):
         helper.plot_set(training_set, data_plot, 0, 5)
         helper.plot_set(valid_set, data_plot, 0, 5)
         helper.plot_set(testing_set, data_plot, 0, 5)
+        helper.plot_set(ISIC_set, data_plot, 0, 5)
 
-    return training_set, valid_set, testing_set, len(test_idx), len(train_idx), len(valid_idx), test_idx
+    return training_set, valid_set, testing_set, ISIC_set, len(test_idx), len(train_idx), len(valid_idx), test_idx
 
-train_set, val_set, test_set, test_size, train_size, val_size, test_indexes = get_data_sets(plot=True)
+train_set, val_set, test_set, ISIC_set, test_size, train_size, val_size, test_indexes = get_data_sets(plot=True)
 
 data_plot = data_plotting.DataPlotting(test_data, test_indexes)
 loss_function = nn.CrossEntropyLoss(weight=class_weights, reduction='mean')
@@ -370,11 +375,11 @@ def print_metrics(root_dir):
     helper.remove_last_row(costs_mc)
     helper.remove_last_row(costs_BBB)
 
-    data_plot.plot_each_mc_true_cost(costs_sr, root_dir, "saved_models/Classifier_0/best_mc_loss/",
-                                     "saved_models/BBB_Classifier_0/best_BBB_loss/", "Test cost by forward pass")
+    data_plot.plot_each_mc_true_cost(costs_sr, root_dir, "saved_models/SM_Classifier_0/",
+                                     "saved_models/BBB_Classifier_0/", "Test cost by forward pass")
 
-    data_plot.plot_each_mc_pass("saved_models/Classifier_0/best_mc_loss/",
-                                "saved_models/BBB_Classifier_0/best_BBB_loss/", predictions_softmax, test_indexes,
+    data_plot.plot_each_mc_pass("saved_models/SM_Classifier_0/",
+                                "saved_models/BBB_Classifier_0/", predictions_softmax, test_indexes,
                                 test_data, root_dir, "Accuracies by Forward Pass", cost_matrix=False)
 
     predictions = [predictions_softmax, predictions_mc, predictions_BBB]
@@ -433,15 +438,15 @@ def print_metrics(root_dir):
     data_plot.plot_risk_coverage(predictions, root_dir, "Risk Coverage")
 
     correct_mc, incorrect_mc, uncertain_mc = helper.get_correct_incorrect(predictions_mc, test_data, test_indexes,
-                                                                          True)
+                                                                          False)
     print(f"MC Accuracy: {len(correct_mc)/(len(correct_mc) + len(incorrect_mc)) * 100}")
 
     correct_sr, incorrect_sr, uncertain_sr = helper.get_correct_incorrect(predictions_softmax, test_data, test_indexes,
-                                                                          True)
+                                                                          False)
     print(f"SM Accuracy: {len(correct_sr) / (len(correct_sr) + len(incorrect_sr)) * 100}")
 
     correct_BBB, incorrect_BBB, uncertain_BBB = helper.get_correct_incorrect(predictions_BBB, test_data, test_indexes,
-                                                                          True)
+                                                                          False)
     print(f"BbB Accuracy: {len(correct_BBB) / (len(correct_BBB) + len(incorrect_BBB)) * 100}")
 
     data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, root_dir, "MC Dropout Entropy by class", by_class=True, prediction_index=0)
@@ -488,7 +493,7 @@ def print_metrics(root_dir):
     data_plot.plot_confusion(confusion_matrix, root_dir, "BbB Response Test Set Normalized without Cost matrix")
 
 
-for i in range(0, 10):
+for i in range(0, 1):
     
     network = model.Classifier(image_size, 8, class_weights, device, dropout=0.3, BBB=BBB)
     network.to(device)
@@ -527,7 +532,8 @@ for i in range(0, 10):
     else:
         SAVE_DIR += f"/SM_Classifier_{i}/"
 
-    starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(SAVE_DIR, 0,
+    if not LOAD:
+        starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(SAVE_DIR, 0,
                                                                                        [], [],
                                                                                        [], [],
                                                                                        verbose=True)
@@ -559,9 +565,15 @@ for i in range(0, 10):
             os.mkdir(SAVE_DIR + "variance/")
             os.mkdir(SAVE_DIR + "costs/")
 
-        predictions_softmax, costs_softmax = testing.predict(test_set, SAVE_DIR, network, test_size, device,
+        if ISIC_pred:
+            predictions_softmax, entropy_soft, costs_softmax = testing.predict(ISIC_set, SAVE_DIR, network, len(ISIC_data), device,
+                                                                 softmax=True, ISIC=True)
+            predictions_softmax.insert(0, ["image","MEL","NV","BCC","AK","BKL","DF","VASC","SCC","UNK"])
+        else:
+            predictions_softmax, entropy_soft, costs_softmax = testing.predict(test_set, SAVE_DIR, network, test_size, device,
                                                              softmax=True)
         helper.write_rows(predictions_softmax, SAVE_DIR + "softmax_predictions.csv")
+        helper.write_rows(entropy_soft, SAVE_DIR + "softmax_entropy.csv")
         helper.write_rows(costs_softmax, SAVE_DIR + "softmax_costs.csv")
 
         predictions_softmax = helper.read_rows(SAVE_DIR + "softmax_predictions.csv")
@@ -570,7 +582,15 @@ for i in range(0, 10):
         predictions_softmax = helper.string_to_float(predictions_softmax)
         costs_sr = helper.string_to_float(costs_sr)
 
-        predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, SAVE_DIR, network, test_size,
+        if ISIC_pred:
+             predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(ISIC_set, SAVE_DIR, network,
+                                                                                   len(ISIC_data),
+                                                                                   device, mc_dropout=True,
+                                                                                   forward_passes=FORWARD_PASSES,
+                                                                                   ISIC=True)
+             predictions_mc_entropy.insert(0, ["image", "MEL", "NV", "BCC", "AK", "BKL", "DF", "VASC", "SCC", "UNK"])
+        else:
+            predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, SAVE_DIR, network, test_size,
                                                                                device, mc_dropout=True,
                                                                                forward_passes=FORWARD_PASSES)
         helper.write_rows(predictions_mc_entropy, SAVE_DIR + "mc_entropy_predictions.csv")
@@ -584,16 +604,16 @@ for i in range(0, 10):
         costs_mc = helper.string_to_float(costs_mc)
 
 
-SAVE_DIR = "saved_models/MC_Classifier_0/"
+SAVE_DIR = "saved_models/SM_Classifier_0/"
 predictions_mc = helper.read_rows(SAVE_DIR + "mc_entropy_predictions.csv")
 costs_mc = helper.read_rows(SAVE_DIR + "mc_costs.csv")
 
 SAVE_DIR = "saved_models/SM_Classifier_0/"
 
-predictions_softmax = helper.read_rows(SAVE_DIR + "softmax_predictions.csv")
+predictions_softmax = helper.read_rows(SAVE_DIR + "softmax_entropy.csv")
 costs_sr = helper.read_rows(SAVE_DIR + "softmax_costs.csv")
 
-SAVE_DIR = "saved_models/BBB_Classifier_0/best_BBB_loss/"
+SAVE_DIR = "saved_models/BBB_Classifier_0/"
 
 predictions_BBB = helper.read_rows(SAVE_DIR + "BBB_entropy_predictions.csv")
 costs_BBB = helper.read_rows(SAVE_DIR + "BBB_costs.csv")
@@ -609,6 +629,10 @@ SAVE_DIR = "saved_models/images/"
 
 if not os.path.exists(SAVE_DIR):
     os.mkdir(SAVE_DIR)
+
+#predictions_BBB = list(helper.get_bayes_preds(predictions_BBB))
+#predictions_softmax = list(helper.get_bayes_preds(predictions_softmax))
+#predictions_mc = list(helper.get_bayes_preds(predictions_mc))
 
 print_metrics(SAVE_DIR)
 
