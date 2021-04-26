@@ -14,14 +14,13 @@ from copy import deepcopy
 from sklearn import metrics
 import numpy as np
 
-
 class DataPlotting:
     """
-    Class for data plotting with matplotlib, contains methods for plotting loss, accuracies and
+    Class for data plotting with matplotlib, contains methods for plotting loss, accuracy and
     confusion matrices
     """
 
-    def __init__(self, data_loader, test_indexes):
+    def __init__(self, data_loader, test_indexes, tick_size, font_size):
         self.data_loader = data_loader
         self.test_indexes = test_indexes
 
@@ -30,6 +29,10 @@ class DataPlotting:
         self.labels = ["Softmax response", "MC Dropout", "BBB"]
 
         self.LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
+
+        self.tick_size = tick_size
+        self.font_size = font_size
+
 
     def show_data(self, data):
         """
@@ -95,7 +98,7 @@ class DataPlotting:
 
     def plot_validation(self, save_dir, epochs, results_val, results_test):
         """
-        Plots the accuracies over time
+        Plots the accuracy over time
         :param epochs: epochs over which the data set was run
         :param results_val: list containing the results at each epoch for validation set
         :param results_test: list containing the results at each epoch for testing set
@@ -141,7 +144,7 @@ class DataPlotting:
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
 
-    def count_sampels_in_intervals(self, predictions, root_dir, title, bins, skip_first=False):
+    def count_sampels_in_intervals(self, predictions, root_dir, title, bins, skip_first=False, color='#1B2ACC'):
         """
         Counts how many predictions occur within given probability range for the calibration plot
         :param predictions: the list of predictions
@@ -177,8 +180,8 @@ class DataPlotting:
         figure.add_subplot(111, frameon=False)
         # hide tick and tick label of the big axis
         plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
-        plt.xlabel("Probability", fontsize=16)
-        plt.ylabel("Number of Samples", fontsize=16)
+        plt.xlabel("Probability", fontsize=self.font_size)
+        plt.ylabel("Number of Samples", fontsize=self.font_size)
         axs = axs.ravel()
         probabilities_range = []
 
@@ -189,7 +192,9 @@ class DataPlotting:
             probabilities_range.append(f"{round(i / bins - 1/bins, 1)} to {round(i / bins, 1)}")
 
         for idx, a in enumerate(axs):
-            a.bar(probabilities_range, bin_count[idx], alpha=0.5)
+            a.tick_params(axis="x", labelsize=self.tick_size)
+            a.tick_params(axis="y", labelsize=self.tick_size)
+            a.bar(probabilities_range, bin_count[idx], alpha=0.5, color=color)
             a.set_title(titles[idx])
 
         plt.tight_layout()
@@ -205,43 +210,50 @@ class DataPlotting:
         :param bins: the range of probabilities you want to test, i.e a bins of 3 will give 3 points on the diagram
         :return:
         """
+
         average_probs = []
         relative_freq = []
-        predictions = deepcopy(predictions)
-        class_probabilities = np.delete(predictions, -1, axis=1)  # delete the uncertainty estimation
 
-        for i in tqdm(range(0, 8)):
-            current_average = []
-            current_freq = []
-            current_probabilities = class_probabilities[:, i: i+1]  # splice out only the class that we're concerned with
+        for k in range(0, len(predictions)):
 
-            # Calculate how many probabilities appear within range
-            for c in range(1, bins + 1):
-                average = current_probabilities[
-                                           (current_probabilities <= c/bins) & (current_probabilities > c/bins - 1/bins)].mean()
+            average_probs.append([])
+            relative_freq.append([])
 
-                # Catch cases where there is no value in the bin
-                if np.isnan(average):
-                    continue
+            prediction = deepcopy(predictions[k])
+            class_probabilities = np.delete(prediction, -1, axis=1)  # delete the uncertainty estimation
 
-                current_average.append(average)
-                correct = 0
-                total = 0
+            for i in tqdm(range(0, 8)):
+                current_average = []
+                current_freq = []
+                current_probabilities = class_probabilities[:, i: i+1]  # splice out only the class that we're concerned with
 
-                # Calculate how many actual correct answers occur within this range
-                for j in range(0, len(current_probabilities)):
-                    if current_probabilities[j] <= c/bins and current_probabilities[j] > c/bins - 1/bins:
-                        if helper.is_prediction_corect(i, self.test_indexes[j], self.data_loader):
-                            correct += 1
-                        total += 1
+                # Calculate how many probabilities appear within range
+                for c in range(1, bins + 1):
+                    average = current_probabilities[
+                                               (current_probabilities <= c/bins) & (current_probabilities > c/bins - 1/bins)].mean()
 
-                if correct == 0:
-                    current_freq.append(0)
-                else:
-                    current_freq.append(correct/total)
+                    # Catch cases where there is no value in the bin
+                    if np.isnan(average):
+                        continue
 
-            average_probs.append(current_average)
-            relative_freq.append(current_freq)
+                    current_average.append(average)
+                    correct = 0
+                    total = 0
+
+                    # Calculate how many actual correct answers occur within this range
+                    for j in range(0, len(current_probabilities)):
+                        if current_probabilities[j] <= c/bins and current_probabilities[j] > c/bins - 1/bins:
+                            if helper.is_prediction_corect(i, self.test_indexes[j], self.data_loader):
+                                correct += 1
+                            total += 1
+
+                    if correct == 0:
+                        current_freq.append(0)
+                    else:
+                        current_freq.append(correct/total)
+
+                average_probs[k].append(current_average)
+                relative_freq[k].append(current_freq)
 
         figure, axs = plt.subplots(2, 4, figsize=(20, 10))
         titles = list(self.LABELS.values())
@@ -250,12 +262,17 @@ class DataPlotting:
         figure.add_subplot(111, frameon=False)
         # hide tick and tick label of the big axis
         plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
-        plt.xlabel("Average Probability", fontsize=16)
-        plt.ylabel("Relative frequency of positive samples", fontsize=16)
+        plt.xlabel("Average Probability", fontsize=self.font_size)
+        plt.ylabel("Relative frequency of positive samples", fontsize=self.font_size)
         axs = axs.ravel()
 
         for idx, a in enumerate(axs):
-            a.plot(average_probs[idx], relative_freq[idx], marker="s")
+            a.tick_params(axis="x", labelsize=14)
+            a.tick_params(axis="y", labelsize=14)
+            for i in range(0, len(predictions)):
+                a.plot(average_probs[i][idx], relative_freq[i][idx], marker="s", color=self.colours[i], label=self.labels[i])
+            if idx == 0:
+                a.legend(loc='best')
             a.plot([0.0, 1.0], [0.0, 1.0], linestyle='dashed', color="black")
             a.set_title(titles[idx])
 
@@ -267,20 +284,20 @@ class DataPlotting:
         """
         Plots a risk coverage curve, showing risk in % on the y-axis showing the risk that the predicitions might be
         wrong and coverage % on the x-axis that plots the % of the dataset that has been included to get that risk
-        :param array: list of accuracies, should be a list containing all predicitions on each class and also the
+        :param array: list of accuracy, should be a list containing all predicitions on each class and also the
         entropy value as the last item in the array.
         :param title: Title of the plot
         :param cost_matrx: whether or not to apply a cost matrix
         :return:
         """
-        accuracies = []
+        accuracy = []
         uncertainties = []
         answers = []
         coverage = []
         predictions = deepcopy(predictions)
 
         for i in range(0, len(predictions)):
-            accuracies.append([])
+            accuracy.append([])
             uncertainties.append([])
             # add the uncertainty metrics to a seperate list
             for pred in predictions[i]:
@@ -304,7 +321,7 @@ class DataPlotting:
                     else:
                         total += 1
 
-                accuracies[c].append(correct/total)
+                accuracy[c].append(correct/total)
 
                 max_uncertainty_row = np.unravel_index(uncertainties[c].argmax(), uncertainties[c].shape)[0]
                 predictions[c] = np.delete(predictions[c], max_uncertainty_row, axis=0)
@@ -313,13 +330,17 @@ class DataPlotting:
 
         coverage.reverse()
 
-        softmax_AUC = round(metrics.auc(coverage, accuracies[0]), 3)
-        dropout_AUC = round(metrics.auc(coverage, accuracies[1]), 3)
-        BBB_AUC = round(metrics.auc(coverage, accuracies[2]), 3)
+        softmax_AUC = round(metrics.auc(coverage, accuracy[0]), 3)
+        dropout_AUC = round(metrics.auc(coverage, accuracy[1]), 3)
+        BBB_AUC = round(metrics.auc(coverage, accuracy[2]), 3)
 
-        plt.plot(coverage, accuracies[0], label="Softmax response")
-        plt.plot(coverage, accuracies[1], label="MC Dropout")
-        plt.plot(coverage, accuracies[2], label="BbB")
+        print("Softmax AUC: " + str(softmax_AUC))
+        print("MC_dropout AUC: " + str(dropout_AUC))
+        print("BBB AUC: " + str(BBB_AUC))
+
+        plt.plot(coverage, accuracy[0], label="Softmax response")
+        plt.plot(coverage, accuracy[1], label="MC Dropout")
+        plt.plot(coverage, accuracy[2], label="BbB")
         plt.title(title)
         #plt.ylim(0.7, 1.1)
         plt.xlabel("Coverage")
@@ -330,7 +351,7 @@ class DataPlotting:
             f'MC Dropout AUC: {dropout_AUC}'
         ))"""
         props = dict(boxstyle='round', fc='white', alpha=0.5)
-        #plt.text(0.6, 5, txt_string, bbox=props, fontsize=10)
+        #plt.text(0.6, 5, txt_string, bbox=props, fontsize=self.font_size)
 
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
@@ -391,6 +412,7 @@ class DataPlotting:
         #dropout_AUC = round(metrics.auc(coverage, average_cost[0]), 3)
         #softmax_AUC = round(metrics.auc(coverage, average_cost[1]), 3)
 
+
         plt.plot(coverage, average_cost[0], label="Softmax response")
         plt.plot(coverage, average_cost[1], label="MC Dropout")
         plt.plot(coverage, average_cost[2], label="BbB")
@@ -405,7 +427,7 @@ class DataPlotting:
             f'MC Dropout AUC: {dropout_AUC}'
         ))"""
         #props = dict(boxstyle='round', fc='white', alpha=0.5)
-        #plt.text(5, 0.6, txt_string, bbox=props, fontsize=10)
+        #plt.text(5, 0.6, txt_string, bbox=props, fontsize=self.font_size)
 
         plt.savefig(f"{root_dir + title}.png")
         plt.show()
@@ -487,6 +509,14 @@ class DataPlotting:
                     averages[c].append(0)
                 else:
                     averages[c].append(sum(values[c]) / len(values[c]))
+
+        softmax_AUC = round(metrics.auc(coverage, averages[0]), 3)
+        dropout_AUC = round(metrics.auc(coverage, averages[1]), 3)
+        BBB_AUC = round(metrics.auc(coverage, averages[2]), 3)
+
+        print("Softmax AUC: " + str(softmax_AUC))
+        print("MC_dropout AUC: " + str(dropout_AUC))
+        print("BBB AUC: " + str(BBB_AUC))
 
         coverage.reverse()
         plt.plot(coverage, averages[0], label="Softmax Response")
@@ -617,11 +647,14 @@ class DataPlotting:
         figure.add_subplot(111, frameon=False)
         # hide tick and tick label of the big axis
         plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
-        plt.xlabel("Coverage", fontsize=16)
-        plt.ylabel("Average Test Cost", fontsize=16)
+        plt.xlabel("Coverage")
+        plt.ylabel("Average Test Cost")
         axs = axs.ravel()
 
         for idx, a in enumerate(axs):
+
+            a.tick_params(axis="x", labelsize=self.tick_size)
+            a.tick_params(axis="y", labelsize=self.tick_size)
 
             a.plot(coverage[self.LABELS[idx]], results_average[0][self.LABELS[idx]], label="Softmax Response")
             a.plot(coverage[self.LABELS[idx]], results_average[1][self.LABELS[idx]], label="MC Dropout")
@@ -672,11 +705,14 @@ class DataPlotting:
             figure.add_subplot(111, frameon=False)
             # hide tick and tick label of the big axis
             plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
-            plt.xlabel("Uncertainty", fontsize=16)
-            plt.ylabel("Number of Samples", fontsize=16)
+            plt.xlabel("Uncertainty", fontsize=self.font_size)
+            plt.ylabel("Number of Samples",  fontsize=self.font_size)
             axs = axs.ravel()
 
             for idx, a in enumerate(axs):
+
+                a.tick_params(axis="x", labelsize=self.tick_size)
+                a.tick_params(axis="y", labelsize=self.tick_size)
 
                 a.hist(labels_correct[self.LABELS[idx]], alpha=0.5, label="Correct")
                 a.hist(labels_incorrect[self.LABELS[idx]], alpha=0.5, label="Incorrect")
@@ -711,7 +747,7 @@ class DataPlotting:
 
     def average_uncertainty_by_class(self, correct, incorrect, root_dir, title):
         """
-        Plots a scatter plot showing accuracies on the y axis and entropy on the x axis
+        Plots a scatter plot showing accuracy on the y axis and entropy on the x axis
         :param correct: The correct predictions
         :param incorrect: the Incorrect predictions
         :param root_dir: directory to save plot to
@@ -720,49 +756,49 @@ class DataPlotting:
         """
 
         labels_accuracy = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
-        labels_entropies = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
+        labels_entropy = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
         labels_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
 
         correct = deepcopy(correct)
         incorrect = deepcopy(incorrect)
 
-        # Count all the answers and add their entropies to the dicts
+        # Count all the answers and add their entropy to the dicts
         for i in range(0, len(correct)):
             answer = correct[i][0]
             entropy = correct[i][-1]
 
             labels_accuracy[self.LABELS[answer]] += 1
-            labels_entropies[self.LABELS[answer]] += entropy
+            labels_entropy[self.LABELS[answer]] += entropy
             labels_count[self.LABELS[answer]] += 1
 
         for i in range(0, len(incorrect)):
             answer = incorrect[i][0]
             entropy = incorrect[i][-1]
 
-            labels_entropies[self.LABELS[answer]] += entropy
+            labels_entropy[self.LABELS[answer]] += entropy
             labels_count[self.LABELS[answer]] += 1
 
-        accuracies = []
-        entropies = []
+        accuracy = []
+        entropy = []
 
         # Calculate accuracy
         for key in labels_accuracy.keys():
-            accuracies.append((labels_accuracy[key]/labels_count[key]) * 100)
-            entropies.append((labels_entropies[key]/labels_count[key]))
+            accuracy.append((labels_accuracy[key]/labels_count[key]) * 100)
+            entropy.append((labels_entropy[key]/labels_count[key]))
 
 
         labels = list(labels_accuracy.keys())
 
         fig, ax = plt.subplots()
-        ax.scatter(entropies, accuracies,
+        ax.scatter(entropy, accuracy,
                    color=['Black', 'Blue', 'Brown', 'Crimson', 'DarkGreen', 'DarkMagenta', 'Gray', 'Peru'], s=20)
 
         for i, txt in enumerate(labels):
-            ax.annotate(txt, (entropies[i], accuracies[i]), xytext=(entropies[i], accuracies[i] + 1))
+            ax.annotate(txt, (entropy[i], accuracy[i]), xytext=(entropy[i], accuracy[i] + 1))
 
         plt.xlabel("Average Entropy")
         plt.ylabel("Accuracy")
-        plt.ylim([min(accuracies) - 5, max(accuracies) + 5])
+        plt.ylim([min(accuracy) - 5, max(accuracy) + 5])
         plt.xlim(left=0)
         plt.title(title)
         plt.savefig(f"{root_dir + title}.png")
@@ -770,10 +806,10 @@ class DataPlotting:
 
     def plot_each_mc_pass(self, mc_dir, BBB_dir, predictions_softmax, test_indexes, test_data, save_dir, title, cost_matrix=False):
 
-        accuracies = [[], [], []]
+        accuracy = [[], [], []]
 
-        pos_avg_entropies = [[], [], []]
-        neg_avg_entropies = [[], [], []]
+        pos_avg_entropy = [[], [], []]
+        neg_avg_entropy = [[], [], []]
 
 
         for i in tqdm(range(0, 100)):
@@ -783,12 +819,12 @@ class DataPlotting:
             current_BBB_predictions = helper.read_rows(BBB_dir + f"entropy/BBB_forward_pass_{i}_" + "entropy" + ".csv")
             current_BBB_predictions = helper.string_to_float(current_BBB_predictions)
 
-            entropies = [[], [], []]
+            entropy = [[], [], []]
 
             for c in range(0, len(current_mc_predictions)):
-                entropies[0].append(predictions_softmax[c][-1])
-                entropies[1].append(current_mc_predictions[c][-1])
-                entropies[2].append(current_BBB_predictions[c][-1])
+                entropy[0].append(predictions_softmax[c][-1])
+                entropy[1].append(current_mc_predictions[c][-1])
+                entropy[2].append(current_BBB_predictions[c][-1])
 
             correct = [[], [], []]
             incorrect = [[], [], []]
@@ -803,23 +839,23 @@ class DataPlotting:
             correct[2], incorrect[2], uncertain[2] = helper.get_correct_incorrect(current_BBB_predictions, test_data,
                                                                                   test_indexes, cost_matrix)
 
-            for c in range(0, len(accuracies)):
-                accuracies[c].append((len(correct[c]) / len(test_indexes)) * 100)
+            for c in range(0, len(accuracy)):
+                accuracy[c].append((len(correct[c]) / len(test_indexes)) * 100)
 
-                pos_avg_entropies[c].append(
-                    (sum(entropies[c]) / len(entropies[c])) + (len(correct[c]) / len(test_indexes)) * 100)
+                pos_avg_entropy[c].append(
+                    (sum(entropy[c]) / len(entropy[c])) + (len(correct[c]) / len(test_indexes)) * 100)
 
-                neg_avg_entropies[c].append(
-                    (sum(entropies[c]) / len(entropies[c]) * -1) + (len(correct[c]) / len(test_indexes)) * 100)
+                neg_avg_entropy[c].append(
+                    (sum(entropy[c]) / len(entropy[c]) * -1) + (len(correct[c]) / len(test_indexes)) * 100)
 
 
         passes = [i for i in range(0, 100)]
-        for i in range(0, len(accuracies)):
+        for i in range(0, len(accuracy)):
             if i == 0:
-                plt.plot(passes, accuracies[i], '--', color=self.colours[i], label=self.labels[i])
+                plt.plot(passes, accuracy[i], '--', color=self.colours[i], label=self.labels[i])
             else:
-                plt.plot(passes, accuracies[i], color=self.colours[i], label=self.labels[i])
-            plt.fill_between(passes, pos_avg_entropies[i], neg_avg_entropies[i], alpha=0.5, edgecolor=self.edge_colours[i])
+                plt.plot(passes, accuracy[i], color=self.colours[i], label=self.labels[i])
+            plt.fill_between(passes, pos_avg_entropy[i], neg_avg_entropy[i], alpha=0.5, edgecolor=self.edge_colours[i])
 
         plt.legend(loc='lower right')
         plt.xlabel("Forward Passes")
@@ -871,10 +907,10 @@ class DataPlotting:
                 plt.plot(passes, avg_costs[i], '--', color=self.colours[i], label=self.labels[i])
             else:
                 plt.plot(passes, avg_costs[i], color=self.colours[i], label=self.labels[i])
-            #plt.fill_between(passes, pos_avg_entropies_mc, neg_avg_entropies_mc, alpha=0.5, edgecolor='#1B2ACC')
+            #plt.fill_between(passes, pos_avg_entropy_mc, neg_avg_entropy_mc, alpha=0.5, edgecolor='#1B2ACC')
 
 
-        plt.legend(loc='lower right')
+        plt.legend(loc='upper right')
         plt.xlabel("Forward Passes")
         plt.ylabel("Average Test cost")
         plt.title(title)

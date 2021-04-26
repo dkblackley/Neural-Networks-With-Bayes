@@ -16,10 +16,9 @@ class data_set(Dataset):
     """
     class responsible for handling and dynamically retreiving data from the data set
     """
-    def __init__(self, meta_path, root_dir, labels_path=False, transforms=None):
+    def __init__(self,root_dir, labels_path=False, transforms=None):
         """
         Init responsible for holding the list of filenames from which you can fetch data from
-        :param meta_path: path to the metadata
         :param root_dir: path to the images files
         :param labels_path: path to the filenames and labels
         :param transforms: transforms to be applied to the data

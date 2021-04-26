@@ -26,7 +26,11 @@ class GaussianDistribution():
         return self.mu + self.sigma * e
 
     def log_prob(self, input):
-        
+        """
+        Makes use of our scale and slab prioir
+        :param input:
+        :return:
+        """
         return (-math.log(math.sqrt(2 * math.pi))
                 - torch.log(self.sigma)
                 - ((input - self.mu) ** 2) / (2 * self.sigma ** 2)).sum()

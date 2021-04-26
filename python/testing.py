@@ -5,10 +5,8 @@ for the ISIC2019 Challenge and also predictions on already known images
 
 import torch
 import torch.nn as nn
-import sys
 import numpy as np
 from tqdm import tqdm
-from scipy.stats import entropy
 import helper
 
 def softmax_pred(data_set, network, n_classes, n_samples, device, ISIC):

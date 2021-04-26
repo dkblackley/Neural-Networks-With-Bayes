@@ -4,22 +4,58 @@ Deals with things like weight balancing, training and testing methods and
 calling other classes for plotting results of the network
 """
 
+
+
 # Global Variables
-EPOCHS = 3
-DEBUG = True # Toggle this to only run for 1% of the training data
-ENABLE_GPU = False  # Toggle this to enable or disable GPU
-BATCH_SIZE = 32
+EPOCHS = 50
+DEBUG = False # Toggle this to only run for 1% of the training data
+ENABLE_GPU = True  # Toggle this to enable or disable GPU
+BATCH_SIZE = 16
 SOFTMAX = True
 TRAIN_MC_DROPOUT = False
 SAMPLES = 3
-FORWARD_PASSES = 3
-BBB = True
+FORWARD_PASSES = 100
+BBB = False
 LOAD = False
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 SAVE_DIR = "saved_models"
-ISIC_pred = True
+ISIC_pred = False
+TRAIN = True
+NUM_MODELS = 1
 
+import sys
 import torch
+
+if torch.cuda.is_available():
+    ENABLE_GPU = True
+else:
+    ENABLE_GPU = False
+
+if __name__ == "__main__":
+    print(f"Arguments count: {len(sys.argv)}")
+    for i, arg in enumerate(sys.argv):
+
+        if arg[0:2] == "-e":
+            EPOCHS = int(arg[2:])
+        if arg[0:3] == "-fp":
+            FORWARD_PASSES = int(arg[3:])
+        if arg[0:4] == "-bbb":
+            BBB = True
+        if arg[0:5] == "-isic":
+            ISIC_pred = True
+        if arg[0:4] == "-cpu":
+            ENABLE_GPU = False
+        if arg[0:5] == "-load":
+            LOAD = True
+        if arg[0:8] == "-predict":
+            TRAIN = False
+        if arg[0:2] == "-n":
+            NUM_MODELS = int(arg[2:])
+
+
+        print(f"Argument {i:>6}: {arg}")
+
+
 import torch.optim as optimizer
 from torchvision import transforms
 from torch.utils.data import random_split, SubsetRandomSampler, Subset, WeightedRandomSampler
@@ -93,9 +129,9 @@ composed_test = transforms.Compose([
                                 transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
                                ])
 
-train_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_train)
-test_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_test)
-ISIC_data = data_loading.data_set("Training_meta_data/ISIC_2019_Training_Metadata.csv", "ISIC_2019_Test_Input",  transforms=composed_test)
+train_data = data_loading.data_set("ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_train)
+test_data = data_loading.data_set("ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_test)
+ISIC_data = data_loading.data_set("ISIC_2019_Test_Input",  transforms=composed_test)
 
 def get_data_sets(plot=False):
     """
@@ -107,7 +143,7 @@ def get_data_sets(plot=False):
     # 70% split to train set, use 2/3rds of the remaining data (20%) for the testing set
     indices = list(range(len(train_data)))
     split_train = int(np.floor(0.7 * len(indices)))
-    split_test = int(np.floor(0.6667 * (len(indices) - split_train)))
+    split_test = int(np.floor(0.66667 * (len(indices) - split_train)))
 
     temp_idx, train_idx = indices[split_train:], indices[:split_train]
     valid_idx, test_idx = temp_idx[split_test:], temp_idx[:split_test]
@@ -132,7 +168,7 @@ def get_data_sets(plot=False):
 
     if plot:
 
-        data_plot = data_plotting.DataPlotting(test_data, test_idx)
+        data_plot = data_plotting.DataPlotting(test_data, test_idx, 12, 14)
 
         helper.plot_set(training_set, data_plot, 0, 5)
         helper.plot_set(valid_set, data_plot, 0, 5)
@@ -143,7 +179,7 @@ def get_data_sets(plot=False):
 
 train_set, val_set, test_set, ISIC_set, test_size, train_size, val_size, test_indexes = get_data_sets(plot=True)
 
-data_plot = data_plotting.DataPlotting(test_data, test_indexes)
+data_plot = data_plotting.DataPlotting(test_data, test_indexes, 12, 14)
 loss_function = nn.CrossEntropyLoss(weight=class_weights, reduction='mean')
 val_loss_function = nn.CrossEntropyLoss(weight=val_weights, reduction='mean')
 
@@ -360,72 +396,60 @@ def test(testing_set, verbose=False):
 
     return accuracy, average_loss
 
-
-"""def train_net(root_dir, starting_epoch=0, val_losses=[], train_losses=[], val_accuracies=[], train_accuracies=[]):
-    starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(root_dir, starting_epoch,
-                                                                                       val_losses, train_losses,
-                                                                                       val_accuracies, train_accuracies,
-                                                                                       verbose=True)
-
-    return val_losses, train_losses, val_accuracies, train_accuracies"""
-
                        
 def print_metrics(root_dir):
     helper.remove_last_row(costs_sr)
     helper.remove_last_row(costs_mc)
     helper.remove_last_row(costs_BBB)
 
+    data_plot.plot_calibration([predictions_softmax, predictions_mc, predictions_BBB], "Reliability diagrams", root_dir, 5)
+
     data_plot.plot_each_mc_true_cost(costs_sr, root_dir, "saved_models/SM_Classifier_0/",
                                      "saved_models/BBB_Classifier_0/", "Test cost by forward pass")
 
     data_plot.plot_each_mc_pass("saved_models/SM_Classifier_0/",
                                 "saved_models/BBB_Classifier_0/", predictions_softmax, test_indexes,
-                                test_data, root_dir, "Accuracies by Forward Pass", cost_matrix=False)
+                                test_data, root_dir, "Accuracy by forward pass", cost_matrix=False)
 
     predictions = [predictions_softmax, predictions_mc, predictions_BBB]
     costs = [costs_sr, costs_mc, costs_BBB]
 
     data_plot.plot_true_cost_coverage_by_class(costs, root_dir,
-                                               "Average Test cost by Classes using LEC")
-    data_plot.plot_true_cost_coverage(costs, root_dir, "Coverage by Average Test cost", uncertainty=False)
+                                               "Average test cost by classes using LEC")
+    data_plot.plot_true_cost_coverage(costs, root_dir, "Coverage by average test cost", uncertainty=False)
 
     data_plot.plot_true_cost_coverage_by_class(predictions, root_dir,
-                                               "Average Test cost by Classes using raw Probabilities with Flattened Matrix",
+                                               "Average test cost by classes using raw probabilities with flattened matrix",
                                                costs=False, flatten=True)
 
     data_plot.plot_true_cost_coverage_by_class(costs, root_dir,
-                                      "Average Test cost by Classes using LEC")
+                                      "Average test cost by classes using LEC")
 
     data_plot.plot_true_cost_coverage_by_class(predictions, root_dir,
-                                               "Average Test cost by Classes using raw Probabilities", costs=False)
+                                               "Average test cost by classes using raw probabilities", costs=False)
 
 
 
     data_plot.plot_true_cost_coverage(predictions, root_dir,
-                                      "Average Test cost using Raw Probabilities with Flattened Matrix", costs=False, flatten=True, uncertainty=True)
+                                      "Average test cost using raw probabilities with flattened matrix", costs=False, flatten=True, uncertainty=True)
     data_plot.plot_true_cost_coverage(predictions, root_dir,
-                                      "Average Test cost using Raw Probabilities", costs=False)
-    data_plot.plot_true_cost_coverage(costs, root_dir, "Average Test cost using LEC")
+                                      "Average test cost using raw probabilities", costs=False)
+    data_plot.plot_true_cost_coverage(costs, root_dir, "Average test cost using LEC")
 
     data_plot.plot_cost_coverage(costs, root_dir, "Coverage by Lowest Expected cost")
 
-    data_plot.count_sampels_in_intervals(predictions_mc, root_dir, "Number of Samples in each Interval MC Dropout", 5)
-    data_plot.count_sampels_in_intervals(predictions_mc, root_dir, "Number of Samples in each Interval MC Dropout (Without probabilites below 0.2)", 5, skip_first=True)
+    data_plot.count_sampels_in_intervals(predictions_mc, root_dir, "Number of samples in each interval MC Dropout", 5, color='teal')
+    data_plot.count_sampels_in_intervals(predictions_mc, root_dir, "Number of samples in each interval MC Dropout (Without probabilites below 0.2)", 5, skip_first=True, color='teal')
 
-    data_plot.count_sampels_in_intervals(predictions_softmax, root_dir, "Number of Samples in each Interval Softmax", 5)
+    data_plot.count_sampels_in_intervals(predictions_softmax, root_dir, "Number of samples in each interval Softmax", 5, color='orange')
     data_plot.count_sampels_in_intervals(predictions_softmax, root_dir,
-                                         "Number of Samples in each Interval Softmax (Without probabilites below 0.2)",
-                                         5, skip_first=True)
+                                         "Number of samples in each interval Softmax (Without probabilites below 0.2)",
+                                         5, skip_first=True, color='orange')
 
-    data_plot.count_sampels_in_intervals(predictions_BBB, root_dir, "Number of Samples in each Interval BbB", 5)
+    data_plot.count_sampels_in_intervals(predictions_BBB, root_dir, "Number of samples in each interval BbB", 5, color='#228B22')
     data_plot.count_sampels_in_intervals(predictions_BBB, root_dir,
-                                         "Number of Samples in each Interval BbB (Without probabilites below 0.2)",
-                                         5, skip_first=True)
-
-
-    data_plot.plot_calibration(predictions_mc, "MC Dropout Reliability Diagram", root_dir, 5)
-    data_plot.plot_calibration(predictions_softmax, "Softmax Reliability Diagram", root_dir, 5)
-    data_plot.plot_calibration(predictions_BBB, "BbB Reliability Diagram", root_dir, 5)
+                                         "Number of samples in each interval BbB (Without probabilites below 0.2)",
+                                         5, skip_first=True, color='#228B22')
 
     costs_with_entropy_mc = helper.attach_last_row(costs_mc, predictions_mc)
     costs_with_entropy_sr = helper.attach_last_row(costs_sr, predictions_softmax)
@@ -433,9 +457,9 @@ def print_metrics(root_dir):
 
     costs_with_entropy = [costs_with_entropy_sr, costs_with_entropy_mc, costs_with_entropy_BBB]
 
-    data_plot.plot_cost_coverage(costs_with_entropy, root_dir, "Risk Coverage by Uncertainty", uncertainty=False)
+    data_plot.plot_cost_coverage(costs_with_entropy, root_dir, "Risk coverage", uncertainty=False)
 
-    data_plot.plot_risk_coverage(predictions, root_dir, "Risk Coverage")
+    data_plot.plot_risk_coverage(predictions, root_dir, "Risk coverage")
 
     correct_mc, incorrect_mc, uncertain_mc = helper.get_correct_incorrect(predictions_mc, test_data, test_indexes,
                                                                           False)
@@ -449,53 +473,53 @@ def print_metrics(root_dir):
                                                                           False)
     print(f"BbB Accuracy: {len(correct_BBB) / (len(correct_BBB) + len(incorrect_BBB)) * 100}")
 
-    data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, root_dir, "MC Dropout Entropy by class", by_class=True, prediction_index=0)
-    data_plot.plot_correct_incorrect_uncertainties(correct_sr, incorrect_sr, root_dir, "Softmax Response Variance by class", by_class=True, prediction_index=0)
-    data_plot.plot_correct_incorrect_uncertainties(correct_BBB, incorrect_BBB, root_dir, "BbB Entropy by class", by_class=True, prediction_index=0)
+    data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, root_dir, "MC Dropout entropy by class", by_class=True, prediction_index=0)
+    data_plot.plot_correct_incorrect_uncertainties(correct_sr, incorrect_sr, root_dir, "Softmax Response entropy by class", by_class=True, prediction_index=0)
+    data_plot.plot_correct_incorrect_uncertainties(correct_BBB, incorrect_BBB, root_dir, "BbB entropy by class", by_class=True, prediction_index=0)
 
-    data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, root_dir, "MC Dropout Entropy across predictions")
-    data_plot.plot_correct_incorrect_uncertainties(correct_sr, incorrect_sr, root_dir, "Softmax Response Entropies across predictions")
-    data_plot.plot_correct_incorrect_uncertainties(correct_BBB, incorrect_BBB, root_dir, "BbB Response Entropies across predictions")
+    data_plot.plot_correct_incorrect_uncertainties(correct_mc, incorrect_mc, root_dir, "MC Dropout entropy across predictions")
+    data_plot.plot_correct_incorrect_uncertainties(correct_sr, incorrect_sr, root_dir, "Softmax Response entropy across predictions")
+    data_plot.plot_correct_incorrect_uncertainties(correct_BBB, incorrect_BBB, root_dir, "BbB entropy across predictions")
 
-    data_plot.average_uncertainty_by_class(correct_mc, incorrect_mc, root_dir, "MC Dropout Accuracies by Prediction")
-    data_plot.average_uncertainty_by_class(correct_sr, incorrect_sr, root_dir, "Softmax Response Accuracies by Prediction")
-    data_plot.average_uncertainty_by_class(correct_BBB, incorrect_BBB, root_dir, "BbB Accuracies by Prediction")
+    data_plot.average_uncertainty_by_class(correct_mc, incorrect_mc, root_dir, "MC Dropout accuracy by prediction")
+    data_plot.average_uncertainty_by_class(correct_sr, incorrect_sr, root_dir, "Softmax Response accuracy by prediction")
+    data_plot.average_uncertainty_by_class(correct_BBB, incorrect_BBB, root_dir, "BbB accuracy by prediction")
 
 
     confusion_matrix = helper.make_confusion_matrix(predictions_softmax, test_data, test_indexes, True)
-    data_plot.plot_confusion(confusion_matrix, root_dir, "Softmax Response on Test Set with Cost matrix")
+    data_plot.plot_confusion(confusion_matrix, root_dir, "Softmax Response on test set with cost matrix")
     confusion_matrix = helper.confusion_array(confusion_matrix, dimension=1)
-    data_plot.plot_confusion(confusion_matrix, root_dir, "Softmax Response Test Set Normalized with Cost matrix")
+    data_plot.plot_confusion(confusion_matrix, root_dir, "Softmax Response test set normalized with cost matrix")
 
     confusion_matrix = helper.make_confusion_matrix(predictions_mc, test_data, test_indexes, True)
-    data_plot.plot_confusion(confusion_matrix, root_dir, "MC dropout Test Set with Cost matrix")
+    data_plot.plot_confusion(confusion_matrix, root_dir, "MC Dropout test set with cost matrix")
     confusion_matrix = helper.confusion_array(confusion_matrix, dimension=1)
-    data_plot.plot_confusion(confusion_matrix, root_dir, "MC dropout Test Set Normalized with Cost matrix")
+    data_plot.plot_confusion(confusion_matrix, root_dir, "MC Dropout test set normalized with cost matrix")
 
     confusion_matrix = helper.make_confusion_matrix(predictions_softmax, test_data, test_indexes, False)
-    data_plot.plot_confusion(confusion_matrix, root_dir, "Softmax Response on Test Set without Cost matrix")
+    data_plot.plot_confusion(confusion_matrix, root_dir, "Softmax Response on test set without cost matrix")
     confusion_matrix = helper.confusion_array(confusion_matrix, dimension=1)
-    data_plot.plot_confusion(confusion_matrix, root_dir, "Softmax Response Test Set Normalized without Cost matrix")
+    data_plot.plot_confusion(confusion_matrix, root_dir, "Softmax Response test set normalized without cost matrix")
 
     confusion_matrix = helper.make_confusion_matrix(predictions_mc, test_data, test_indexes, False)
-    data_plot.plot_confusion(confusion_matrix, root_dir, "MC dropout Test Set without Cost matrix")
+    data_plot.plot_confusion(confusion_matrix, root_dir, "MC dropout test set without cost matrix")
     confusion_matrix = helper.confusion_array(confusion_matrix, dimension=1)
-    data_plot.plot_confusion(confusion_matrix, root_dir, "MC dropout Test Set Normalized without Cost matrix")
+    data_plot.plot_confusion(confusion_matrix, root_dir, "MC dropout test set normalized without cost matrix")
 
     confusion_matrix = helper.make_confusion_matrix(predictions_BBB, test_data, test_indexes, True)
-    data_plot.plot_confusion(confusion_matrix, root_dir, "BbB Response on Test Set with Cost matrix")
+    data_plot.plot_confusion(confusion_matrix, root_dir, "BbB on test set with cost matrix")
     confusion_matrix = helper.confusion_array(confusion_matrix, dimension=1)
-    data_plot.plot_confusion(confusion_matrix, root_dir, "BbB Response Test Set Normalized with Cost matrix")
+    data_plot.plot_confusion(confusion_matrix, root_dir, "BbB test set normalized with cost matrix")
 
     confusion_matrix = helper.make_confusion_matrix(predictions_BBB, test_data, test_indexes, False)
-    data_plot.plot_confusion(confusion_matrix, root_dir, "BbB Response on Test Set without Cost matrix")
+    data_plot.plot_confusion(confusion_matrix, root_dir, "BbB on test set without cost matrix")
     confusion_matrix = helper.confusion_array(confusion_matrix, dimension=1)
-    data_plot.plot_confusion(confusion_matrix, root_dir, "BbB Response Test Set Normalized without Cost matrix")
+    data_plot.plot_confusion(confusion_matrix, root_dir, "BbB test set normalized without cost matrix")
 
 
-for i in range(0, 1):
+for i in range(0, NUM_MODELS):
     
-    network = model.Classifier(image_size, 8, class_weights, device, dropout=0.3, BBB=BBB)
+    network = model.Classifier(image_size, 8, class_weights, device, dropout=0.5, BBB=BBB)
     network.to(device)
 
     if BBB:
@@ -510,13 +534,13 @@ for i in range(0, 1):
         optim = optimizer.SGD([
                 {'params': BBB_parameters},
                 {'params': base_parameters, 'lr': 0.0001}
-            ], lr=0.0001, momentum=0.9)
+            ], lr=0.0001, momentum=0.9, weight_decay=0.00001)
         
-        scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=[0.0001, 0.0001], max_lr=[0.12, 0.03], step_size_up=(555 * 10), mode="exp_range", gamma=0.9999)
+        scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=[0.0001, 0.0001], max_lr=[0.1, 0.02], step_size_up=(555 * 5), mode="triangular2")
 
     else:
-        optim = optimizer.SGD(network.parameters(), lr=0.0001, momentum=0.9)
-        scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.03, step_size_up=(555 * 10), mode="exp_range", gamma=0.9999)
+        optim = optimizer.SGD(network.parameters(), lr=0.0001, momentum=0.9, weight_decay=0.00001)
+        scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.02, step_size_up=(555 * 5), mode="triangular2")
 
     
     ROOT_SAVE_DIR = SAVE_DIR
@@ -532,11 +556,22 @@ for i in range(0, 1):
     else:
         SAVE_DIR += f"/SM_Classifier_{i}/"
 
-    if not LOAD:
+    if LOAD:
+        network, optim, scheduler, starting_epoch,\
+        val_losses, train_losses, val_accuracies,\
+        train_accuracies = helper.load_net(SAVE_DIR, 8, image_size, device, class_weights)
+        if TRAIN:
+            starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(SAVE_DIR, starting_epoch,
+                                                                                               val_losses, train_losses,
+                                                                                               val_accuracies,
+                                                                                               train_accuracies,
+                                                                                               verbose=False)
+
+    else:
         starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(SAVE_DIR, 0,
-                                                                                       [], [],
-                                                                                       [], [],
-                                                                                       verbose=True)
+                                                                                           [], [],
+                                                                                           [], [],
+                                                                                           verbose=True)
 
     if BBB:
         network, optim, scheduler, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = helper.load_net(SAVE_DIR, 8, image_size, device, class_weights)
@@ -614,6 +649,7 @@ costs_mc = helper.read_rows(SAVE_DIR + "mc_costs.csv")
 SAVE_DIR = "saved_models/SM_Classifier_0/"
 
 predictions_softmax = helper.read_rows(SAVE_DIR + "softmax_entropy.csv")
+#predictions_softmax = helper.read_rows(SAVE_DIR + "softmax_predictions.csv")
 costs_sr = helper.read_rows(SAVE_DIR + "softmax_costs.csv")
 
 SAVE_DIR = "saved_models/BBB_Classifier_0/"
@@ -633,9 +669,7 @@ SAVE_DIR = "saved_models/images/"
 if not os.path.exists(SAVE_DIR):
     os.mkdir(SAVE_DIR)
 
-#predictions_BBB = list(helper.get_bayes_preds(predictions_BBB))
-#predictions_softmax = list(helper.get_bayes_preds(predictions_softmax))
-#predictions_mc = list(helper.get_bayes_preds(predictions_mc))
+
 
 print_metrics(SAVE_DIR)
 
