@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as TF
 
-# Credit to https://www.nitarshan.com/bayes-by-backprop/, Tutorial was followed and adapted to suit my specific model
 class GaussianDistribution():
 
     def __init__(self, mu, rho, device):
