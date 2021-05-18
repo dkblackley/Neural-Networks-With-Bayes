@@ -12,24 +12,30 @@ from copy import deepcopy
 import numpy as np
 import os
 
-
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
 
-def plot_image_at_index(data_plot, data_loader, index):
 
+def plot_image_at_index(data_plot, data_loader, index):
+    """
+    plots image at a given index
+    :param data_plot: data plotting class to display images with
+    :param data_loader: Pytorch data loader
+    :param index: index of the image you want to view
+    :return:
+    """
     data = data_loader[index]
     data_plot.show_data(data)
     print(index, data['image'].size(), LABELS[data['label']])
-    # Only display the first X images
-
 
 def plot_set(data_set, data_plot, stop, batch_stop):
     """
-    displays image from data set
-    :param data_set: data set to display images from
-    :param data_plot: plotting class that uses matplotlib to display samples
+    plots a set of images in a batch
+    :param data_set: Pytorch data loader
+    :param data_plot: data plotting class from data_plot.py
+    :param stop: which batch to show in the data loader
+    :param batch_stop: how many images from the batch to show
+    :return:
     """
-
     for i_batch, sample_batch in enumerate(data_set):
         print(i_batch, sample_batch['image'].size(),
               sample_batch['label'].size())
@@ -40,14 +46,20 @@ def plot_set(data_set, data_plot, stop, batch_stop):
 
 
 def save_net(net, optim, lr_sched, PATH):
+    """
+    Saves the network, optimiser, scheduler and network in the specified path
+    """
     states = {'network': net.state_dict(),
              'optimizer': optim.state_dict(),
              'lr_sched': lr_sched.state_dict()}
     torch.save(states, PATH)
 
 def change_to_device(network, optim, device):
+    """
+    Puts the network and optimiser onto the specified device
+    :return: the network and optimiser
+    """
     network = network.to(device)
-
     for state in optim.state.values():
         for k, v in state.items():
             if isinstance(v, torch.Tensor):
@@ -56,8 +68,16 @@ def change_to_device(network, optim, device):
     return network, optim
 
 def read_net(PATH, image_size, output_size, device, class_weights):
+    """
+    reads the network from the specified PATH
+    :param PATH: path to network
+    :param image_size: size of the image, used for efficientnet
+    :param output_size: number of output classes
+    :param device: device to put the network on
+    :param class_weights: weights of the classes
+    :return:
+    """
     net = model.Classifier(image_size, output_size, device, class_weights)
-    #optim = optimizer.Adam(net.parameters(), lr=0.001)
     optim = optimizer.SGD(net.parameters(), lr=0.00001)
     scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.03, step_size_up=(555 * 10))
     states = torch.load(PATH, map_location=device)
@@ -67,14 +87,12 @@ def read_net(PATH, image_size, output_size, device, class_weights):
         optim.load_state_dict(states['optimizer'])
         scheduler.load_state_dict(states['lr_sched'])
     except Exception as e:
+        # if an exception occurs, try loading in BbB network
         net = model.Classifier(image_size, output_size, device, class_weights, BBB=True)
-        
-        BBB_weights = ['hidden_layer.weight_mu', 'hidden_layer.weight_rho', 'hidden_layer.bias_mu', 'hidden_layer.bias_rho',
-                      'hidden_layer2.weight_mu', 'hidden_layer2.weight_rho', 'hidden_layer2.bias_mu', 'hidden_layer2.bias_rho']
+        BBB_weights = ['hidden_layer.weight_mu', 'hidden_layer.weight_rho', 'hidden_layer.bias_mu', 'hidden_layer.bias_rho']
         BBB_parameters = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] in BBB_weights, net.named_parameters()))))
         base_parameters = list(map(lambda x: x[1],list(filter(lambda kv: kv[0] not in BBB_weights, net.named_parameters()))))
-        
-    
+
         optim = optimizer.SGD([
                 {'params': BBB_parameters},
                 {'params': base_parameters, 'lr': 0.0001}
@@ -86,7 +104,6 @@ def read_net(PATH, image_size, output_size, device, class_weights):
         scheduler.load_state_dict(states['lr_sched'])
 
     net.train()
-    
     net, optim = change_to_device(net, optim, device)
     
     return net, optim, scheduler
@@ -100,32 +117,30 @@ def get_mean_and_std(data_set):
     """
     colour_sum = 0
     channel_squared = 0
-
     print("\nCalculating mean and std:\n")
-
     for i_batch, sample_batch in enumerate(tqdm(data_set)):
         colour_sum += torch.mean(sample_batch['image'], dim=[0,2,3])
         channel_squared += torch.mean(sample_batch['image']**2, dim=[0,2,3])
 
     mean = colour_sum / len(data_set)
     std = (channel_squared/len(data_set) - mean**2)**0.5
-
     print(f"\nMean: {mean}")
     print(f"\nStandard Deviation: {std}")
 
     return mean, std
 
 def read_csv(filename):
-
+    """
+    read a file of comma separated values
+    :return: a list of the read values
+    """
     list_to_return = []
-
     with open(filename) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
         for row in csv_reader:
             list_to_return += row
 
     new_list = []
-
     for item in list_to_return:
         new_list.append(float(item))
 
@@ -136,7 +151,6 @@ def write_csv(list_to_write, filename):
     writes a list of items to a output file, used mainly for saving loss and accuracy values
     :param list_to_write: list to write to csv
     :param filename: location and name of csv file
-    :return:
     """
 
     with open(filename, 'w', newline='') as f:
@@ -144,10 +158,12 @@ def write_csv(list_to_write, filename):
         writer.writerow(list_to_write)
 
 def count_classes(dataset, batch_size):
+    """
+    Counts the classes in a Pytorch dataset
+    """
     LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
     labels_count = {'MEL': 0, 'NV': 0, 'BCC': 0, 'AK': 0, 'BKL': 0, 'DF': 0, 'VASC': 0, 'SCC': 0}
     print("\nCounting labels")
-
     for i_batch, sample_batch in enumerate(tqdm(dataset)):
         labels_batch = sample_batch['label']
         for i in range(len(labels_batch)):
@@ -159,9 +175,9 @@ def count_classes(dataset, batch_size):
                 continue
 
     print(labels_count)
-
     for label, count in labels_count.items():
         print(f"{label}: {round(count / (len(dataset) * batch_size) * 100, 3)}%")
+
     temp = labels_count.values()
     temp = list(temp)
     temp = sum(temp)
@@ -182,44 +198,48 @@ def write_rows(list_to_write, filename):
         writer.writerows(list_to_write)
 
 def attach_last_row(array1, array2):
-
+    """
+    attaches the last row of array2 to array1
+    """
     for i in range(0, len(array2)):
-        temp = array2[i][-1]
         array1[i].append(array2[i][-1])
 
     return array1
 
 def read_rows(filname):
-
+    """
+    reads a csv file and returns it in a list
+    """
     with open(filname, 'r', newline='') as f:
         reader = csv.reader(f)
         arrays = list(reader)
 
     return arrays
 
-def calculate_sens_spec_acc(predictions):
-    TP = 0
-    FN = 0
-    CP = 0
-    CN = 0
-
-
 def float_to_string(arrays):
-
+    """
+    converts a list of floats to a list of strings
+    """
     for c in range(0, len(arrays)):
         arrays[c] = '{:.17f}'.format(arrays[c])
 
     return arrays
 
 def string_to_float(arrays):
+    """
+    converts a list of strings to a list of floats
+    """
     for c in range(0, len(arrays)):
         for i in range(0, len(arrays[c])):
             arrays[c][i] = float(arrays[c][i])
 
     return arrays
 
-def normalize_matrix(matrix, min_val=0, max_val=150):
 
+def normalize_matrix(matrix, min_val=0, max_val=150):
+    """
+    converts all values in a matrix of values to be within the specified min and max
+    """
     for array in matrix:
         for i in range(0, len(array)):
 
@@ -227,186 +247,15 @@ def normalize_matrix(matrix, min_val=0, max_val=150):
                 array[i] = 1 + ((array[i] - min_val) / (max_val - min_val))
             else:
                 array[i] = float(array[i])
-
-
-
-
     return matrix
 
-
-def get_cost_matrix():
-    """cost_matrix = [[0, 10, 10, 10, 10, 10, 10, 0],
-                  [150, 0, 30, 20, 0, 0, 20, 150],
-                  [10, 10, 0, 0, 10, 10, 0, 10],
-                  [10, 10, 0, 0, 10, 10, 0, 10],
-                  [150, 0, 30, 20, 0, 0, 20, 150],
-                  [150, 0, 30, 20, 0, 0, 20, 150],
-                  [10, 10, 0, 0, 10, 10, 0, 10],
-                  [0, 10, 10, 10, 10, 10, 10, 0]]"""
-
-    """    cost_matrix = [[1, 10, 10, 10, 10, 10, 10, 1],
-                   [150, 1, 30, 20, 1, 1, 20, 150],
-                   [10, 10, 1, 1, 10, 10, 1, 10],
-                   [10, 10, 1, 1, 10, 10, 1, 10],
-                   [150, 1, 30, 20, 1, 1, 20, 150],
-                   [150, 1, 30, 20, 1, 1, 20, 150],
-                   [10, 10, 1, 1, 10, 10, 1, 10],
-                   [1, 10, 10, 10, 10, 10, 10, 1]]"""
-
-    """cost_matrix = [[0.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 0.1],
-                   [15.1, 0.1, 3.1, 2.1, 0.1, 0.1, 2.1, 15.1],
-                   [1.1, 1.1, 0.1, 0.1, 1.1, 1.1, 0.1, 1.1],
-                   [1.1, 1.1, 0.1, 0.1, 1.1, 1.1, 0.1, 1.1],
-                   [15.1, 0.1, 3.1, 2.1, 0.1, 0.1, 2.1, 15.1],
-                   [15.1, 0.1, 3.1, 2.1, 0.1, 0.1, 2.1, 15.1],
-                   [1.1, 1.1, 0.1, 0.1, 1.1, 1.1, 0.1, 1.1],
-                   [0.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 0.1]]"""
-
-    """cost_matrix = [[1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1],
-                   [15.1, 1, 3.1, 2.1, 1, 1, 2.1, 16.5],
-                   [1.1, 1.1, 1, 1, 1.1, 1.1, 1, 1.1],
-                   [1.1, 1.1, 1, 1, 1.1, 1.1, 1, 1.1],
-                   [16.5, 1, 3.3, 2.2, 1, 1, 2.2, 16.5],
-                   [16.5, 1, 3.3, 2.2, 1, 1, 2.2, 16.5],
-                   [1.1, 1.1, 1, 1, 1.1, 1.1, 1, 1.1],
-                   [1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1]]"""
-
-    """    cost_matrix = [[1, 10, 10, 10, 10, 10, 10, 1],
-                   [150, 1, 30, 20, 1, 1, 20, 150],
-                   [10, 10, 1, 1, 10, 10, 1, 10],
-                   [10, 10, 1, 1, 10, 10, 1, 10],
-                   [150, 1, 30, 20, 1, 1, 20, 150],
-                   [150, 1, 30, 20, 1, 1, 20, 150],
-                   [10, 10, 1, 1, 10, 10, 1, 10],
-                   [1, 10, 10, 10, 10, 10, 10, 1]]"""
-    # LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
-
-    """cost_matrix = [[0, 150, 10, 10, 150, 150, 10, 0],
-                   [10, 0, 10, 10, 0, 0, 10, 10],
-                   [10, 30, 0, 0, 30, 30, 0, 10],
-                   [10, 20, 0, 0, 20, 20, 0, 10],
-                   [10, 0, 10, 10, 0, 0, 10, 10],
-                   [10, 0, 10, 10, 0, 0, 10, 10],
-                   [10, 20, 0, 0, 20, 20, 0, 10],
-                   [0, 150, 10, 10, 150, 150, 10, 0]]"""
-
-    cost_matrix = [[1, 150, 10, 10, 150, 150, 10, 1],
-                   [10, 1, 10, 10, 1, 1, 10, 10],
-                   [10, 30, 1, 1, 30, 30, 1, 10],
-                   [10, 20, 1, 1, 20, 20, 1, 10],
-                   [10, 1, 10, 10, 1, 1, 10, 10],
-                   [10, 1, 10, 10, 1, 1, 10, 10],
-                   [10, 20, 1, 1, 20, 20, 1, 10],
-                   [1, 150, 10, 10, 150, 150, 10, 1]]
-
-    normalize_matrix(cost_matrix)
-
-    """cost_matrix = [[1, 16.5, 1.1, 1.1, 16.5, 16.5, 1.1, 1],
-                   [1.1, 1, 1.1, 1.1, 1, 1, 1.1, 1.1],
-                   [1.1, 3.3, 1, 1, 3.3, 3.3, 1, 1.1],
-                   [1.1, 2.2, 1, 1, 2.2, 2.2, 1, 1.1],
-                   [1.1, 1, 1.1, 1.1, 1, 1, 1.1, 1.1],
-                   [1.1, 1, 1.1, 1.1, 1, 1, 1.1, 1.1],
-                   [1.1, 2.2, 1, 1, 2.2, 2.2, 1, 1.1],
-                   [1, 16.5, 1.1, 1.1, 16.5, 16.5, 1.1, 1]]"""
-
-
-
-    return cost_matrix
-
-def find_best_answer():
-    pass
-
-def get_cost(answer, real_answer, num_classes=8):
-
-    """cost_matrix = [[0, 10, 10, 10, 10, 10, 10, 0],
-                  [150, 0, 30, 20, 0, 0, 20, 150],
-                  [10, 10, 0, 0, 10, 10, 0, 10],
-                  [10, 10, 0, 0, 10, 10, 0, 10],
-                  [150, 0, 30, 20, 0, 0, 20, 150],
-                  [150, 0, 30, 20, 0, 0, 20, 150],
-                  [10, 10, 0, 0, 10, 10, 0, 10],
-                  [0, 10, 10, 10, 10, 10, 10, 0]]"""
-
-    """    cost_matrix = [[1, 10, 10, 10, 10, 10, 10, 1],
-                   [150, 1, 30, 20, 1, 1, 20, 150],
-                   [10, 10, 1, 1, 10, 10, 1, 10],
-                   [10, 10, 1, 1, 10, 10, 1, 10],
-                   [150, 1, 30, 20, 1, 1, 20, 150],
-                   [150, 1, 30, 20, 1, 1, 20, 150],
-                   [10, 10, 1, 1, 10, 10, 1, 10],
-                   [1, 10, 10, 10, 10, 10, 10, 1]]"""
-
-    """cost_matrix = [[0.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 0.1],
-                   [15.1, 0.1, 3.1, 2.1, 0.1, 0.1, 2.1, 15.1],
-                   [1.1, 1.1, 0.1, 0.1, 1.1, 1.1, 0.1, 1.1],
-                   [1.1, 1.1, 0.1, 0.1, 1.1, 1.1, 0.1, 1.1],
-                   [15.1, 0.1, 3.1, 2.1, 0.1, 0.1, 2.1, 15.1],
-                   [15.1, 0.1, 3.1, 2.1, 0.1, 0.1, 2.1, 15.1],
-                   [1.1, 1.1, 0.1, 0.1, 1.1, 1.1, 0.1, 1.1],
-                   [0.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 0.1]]"""
-
-    """cost_matrix = [[1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1],
-                   [15.1, 1, 3.1, 2.1, 1, 1, 2.1, 16.5],
-                   [1.1, 1.1, 1, 1, 1.1, 1.1, 1, 1.1],
-                   [1.1, 1.1, 1, 1, 1.1, 1.1, 1, 1.1],
-                   [16.5, 1, 3.3, 2.2, 1, 1, 2.2, 16.5],
-                   [16.5, 1, 3.3, 2.2, 1, 1, 2.2, 16.5],
-                   [1.1, 1.1, 1, 1, 1.1, 1.1, 1, 1.1],
-                   [1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1]]"""
-
-    """    cost_matrix = [[1, 10, 10, 10, 10, 10, 10, 1],
-                   [150, 1, 30, 20, 1, 1, 20, 150],
-                   [10, 10, 1, 1, 10, 10, 1, 10],
-                   [10, 10, 1, 1, 10, 10, 1, 10],
-                   [150, 1, 30, 20, 1, 1, 20, 150],
-                   [150, 1, 30, 20, 1, 1, 20, 150],
-                   [10, 10, 1, 1, 10, 10, 1, 10],
-                   [1, 10, 10, 10, 10, 10, 10, 1]]"""
-    #LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC'}
-
-
-    """cost_matrix = [[0, 150, 10, 10, 150, 150, 10, 0],
-                   [10, 0, 10, 10, 0, 0, 10, 10],
-                   [10, 30, 0, 0, 30, 30, 0, 10],
-                   [10, 20, 0, 0, 20, 20, 0, 10],
-                   [10, 0, 10, 10, 0, 0, 10, 10],
-                   [10, 0, 10, 10, 0, 0, 10, 10],
-                   [10, 20, 0, 0, 20, 20, 0, 10],
-                   [0, 150, 10, 10, 150, 150, 10, 0]]"""
-
-    cost_matrix = [[1, 150, 10, 10, 150, 150, 10, 1],
-                   [10, 1, 10, 10, 1, 1, 10, 10],
-                   [10, 30, 1, 1, 30, 30, 1, 10],
-                   [10, 20, 1, 1, 20, 20, 1, 10],
-                   [10, 1, 10, 10, 1, 1, 10, 10],
-                   [10, 1, 10, 10, 1, 1, 10, 10],
-                   [10, 20, 1, 1, 20, 20, 1, 10],
-                   [1, 150, 10, 10, 150, 150, 10, 1]]
-
-    normalize_matrix(cost_matrix)
-
-    """cost_matrix = [[1, 16.5, 1.1, 1.1, 16.5, 16.5, 1.1, 1],
-                   [1.1, 1, 1.1, 1.1, 1, 1, 1.1, 1.1],
-                   [1.1, 3.3, 1, 1, 3.3, 3.3, 1, 1.1],
-                   [1.1, 2.2, 1, 1, 2.2, 2.2, 1, 1.1],
-                   [1.1, 1, 1.1, 1.1, 1, 1, 1.1, 1.1],
-                   [1.1, 1, 1.1, 1.1, 1, 1, 1.1, 1.1],
-                   [1.1, 2.2, 1, 1, 2.2, 2.2, 1, 1.1],
-                   [1, 16.5, 1.1, 1.1, 16.5, 16.5, 1.1, 1]]"""
-
-
-
-
-    #cost = torch.tensor(cost_matrix[answer.item()][real_answer.item()])
-    cost = torch.tensor(cost_matrix[real_answer.item()][answer.item()])
-
-
-    return cost
-
-
-def find_lowest_cost(probabilities, num_classes=8, uncertain=False):
-
+def find_lowest_cost(probabilities, uncertain=False):
+    """
+    given a probability distribution, selects the LEC prediction
+    :param probabilities: probability distribution
+    :param uncertain: include a extra cost of classifying as unknown
+    :return: prediction and the expected cost of that classification
+    """
     if uncertain:
         cost_matrix = np.array([
                     [0, 150, 10, 10, 150, 150, 10, 1, 10],
@@ -429,28 +278,17 @@ def find_lowest_cost(probabilities, num_classes=8, uncertain=False):
                    [10, 20, 1, 1, 20, 20, 0, 10],
                    [1, 150, 10, 10, 150, 150, 10, 0]])
 
-    """cost_matrix = np.array([
-                   [0, 150, 10, 10],
-                   [10, 0, 10, 10],
-                   [10, 30, 0, 1],
-                   [10, 20, 1, 0]])"""
-
     lowest_cost = -1
     answer = 0
-
     for j in range(len(probabilities)):
         total = 0
 
         for k in range(0, len(probabilities)):
-            temp = cost_matrix[k][j]
             total += probabilities[k] * cost_matrix[k][j]
 
         if lowest_cost > total or lowest_cost == -1:
             answer = j
             lowest_cost = total
-
-    #if np.argmax(probabilities) == 6:
-    #    print('oi')
 
     return answer, lowest_cost
 
@@ -459,16 +297,21 @@ def get_label_indexes(predictions, test_indexes, data_loader):
     new_predictions = {'MEL': [], 'NV': [], 'BCC': [], 'AK': [], 'BKL': [], 'DF': [], 'VASC': [], 'SCC': []}
 
     for i in range(0, len(test_indexes)):
-
         label = data_loader.get_label(test_indexes[i])
         indexes[LABELS[label]].append(test_indexes[i])
         new_predictions[LABELS[label]].append(predictions[i])
 
     return new_predictions, indexes
 
-
-def find_true_cost(prediction, answer, num_classes=8, uncertain=False, flatten=False):
-
+def find_true_cost(prediction, answer, uncertain=False, flatten=False):
+    """
+    find the true cost of a classification decision
+    :param prediction: classification decision
+    :param answer: real answer
+    :param uncertain: include a uncertain cost
+    :param flatten: make all cost of miss-classification 1
+    :return: true cost of classification decision
+    """
     if flatten:
         cost_matrix = [
             [0, 1, 1, 1, 1, 1, 1, 1],
@@ -503,34 +346,18 @@ def find_true_cost(prediction, answer, num_classes=8, uncertain=False, flatten=F
 
     return cost_matrix[answer][prediction]
 
-def remove_values_below_threshold(list, threshold):
-    pass
 
 def remove_last_row(arrays):
+    """
+    Removes last row from a list
+    """
     for array in arrays:
         array.pop()
 
-def test_lowest_cost(probabilities, num_classes=8):
-    cost_matrix = np.array([[0, 2],
-                            [1, 0]])
-
-    lowest_cost = -1
-    answer = 0
-
-    for j in range(len(probabilities)):
-        total = 0
-
-        for k in range(0, len(probabilities)):
-            total += probabilities[k] * cost_matrix[k][j]
-
-        if lowest_cost > total or lowest_cost == -1:
-            answer = j
-            lowest_cost = total
-
-    return answer, lowest_cost
-
 def get_each_cost(probabilities, uncertain=False):
-
+    """
+    given a probability distribution, returns a cost distribution
+    """
     costs = []
 
     if uncertain:
@@ -559,18 +386,23 @@ def get_each_cost(probabilities, uncertain=False):
         total = 0
 
         for k in range(0, len(probabilities)):
-            temp = cost_matrix[k][j]
             total += probabilities[k] * cost_matrix[k][j]
 
         costs.append(total)
 
-
     return costs
 
 
-
 def get_correct_incorrect(predictions, data_loader, test_indexes, cost_matrix, threshold=-1.0):
-
+    """
+    splits predictions into correct, incorrect and uncertain
+    :param predictions: list of all predictions
+    :param data_loader: Pytorch data loader class
+    :param test_indexes: indexes of the test set
+    :param cost_matrix: whether to apply a cost matrix
+    :param threshold: threshold to reject.
+    :return: 3 lists containing the predicted answer, real answer and uncertainty
+    """
     predictions = deepcopy(predictions)
 
     correct = []
@@ -603,52 +435,56 @@ def get_correct_incorrect(predictions, data_loader, test_indexes, cost_matrix, t
 def is_prediction_corect(prediction, index, data_loader):
 
     real_answer = data_loader.get_label(index)
-
     if prediction == real_answer:
         return True
     else:
         return False
 
 def confusion_array(arrays, dimension=0):
-
+    """
+    normalizes a confusion matrix
+    """
     np_array = np.array(arrays)
-
     summed_array = np_array.sum(axis=dimension, keepdims=1)
-
     new_arrays = np.divide(np_array, summed_array, out=np.zeros(np_array.shape, dtype=float),
                                                   where=summed_array!=0)
     new_arrays = np.round(new_arrays, 3)
-
     return new_arrays.tolist()
 
 
-def make_confusion_matrix(predictions, data_loader, test_indexes, cost_matrix, threshold=-1.0):
+def make_confusion_matrix(predictions, data_loader, test_indexes, cost_matrix):
+    """
+    makes a confusion matrix from given predictions
+    :param predictions: a list of all our networks predictions
+    :param data_loader: Pytorch data loader class
+    :param test_indexes: indexes of the test set in the data loader
+    :param cost_matrix: prediction with cost consideration
+    :return: confusion matrix
+    """
     predictions = deepcopy(predictions)
-
     confusion_matrix = []
-
     for i in range(8):
         confusion_matrix.append([0, 0, 0, 0, 0, 0, 0, 0])
 
     total = 0
-
     for index in test_indexes:
-
         predictions[total].pop()
         if cost_matrix:
             answer = find_lowest_cost(predictions[total])[0]
         else:
             answer = np.argmax(predictions[total])
+
         real_answer = data_loader.get_label(index)
-
         confusion_matrix[real_answer][answer] += 1
-
         total += 1
 
     return confusion_matrix
 
 
 def save_network(network, optim, scheduler, val_losses, train_losses, val_accuracies, train_accuracies, root_dir):
+    """
+    saves network, optimiser, etc, to the specified directory
+    """
     if not os.path.isdir(root_dir):
         os.mkdir(root_dir)
 
@@ -660,6 +496,9 @@ def save_network(network, optim, scheduler, val_losses, train_losses, val_accura
 
 
 def load_net(root_dir, output_size, image_size, device, class_weights):
+    """
+    loads network, optimiser etc. from a specified directory
+    """
     val_losses = read_csv(root_dir + "val_losses.csv")
     train_losses = read_csv(root_dir + "train_losses.csv")
     val_accuracies = read_csv(root_dir + "val_accuracies.csv")
