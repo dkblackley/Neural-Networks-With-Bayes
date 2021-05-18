@@ -16,7 +16,7 @@ class data_set(Dataset):
     """
     class responsible for handling and dynamically retreiving data from the data set
     """
-    def __init__(self,root_dir, labels_path=False, transforms=None):
+    def __init__(self, root_dir, labels_path=False, transforms=None, seed=1337):
         """
         Init responsible for holding the list of filenames from which you can fetch data from
         :param root_dir: path to the images files
@@ -25,7 +25,6 @@ class data_set(Dataset):
         """
 
         self.train_image_dir = root_dir
-        # self.metadata = pd.read_csv(meta_path) TODO: Use metadata
         self.file_names = os.listdir(self.train_image_dir)
         self.file_names.sort()
         self.transforms = transforms
@@ -35,7 +34,8 @@ class data_set(Dataset):
             self.labels = pd.read_csv(labels_path)
             self.classes = self.labels.columns[1:10].values
             self.labels = np.array(self.labels.values)
-            np.random.seed(1337)
+            np.random.seed(seed)
+            # Shuffle the labels here for stratified sampling
             np.random.shuffle(self.labels)
         else:
             self.labels = False
@@ -51,7 +51,6 @@ class data_set(Dataset):
         :return: dictionary containing image and label
         """
 
-        #file_name = self.file_names[index]
         if self.labels is False:
             file_name = self.file_names[index]
         else:
@@ -76,15 +75,12 @@ class data_set(Dataset):
     def get_label(self, index):
         """
         Returns the label as an integer at the specified index
-        :param index:
-        :return:
         """
         return self.get_class_name(self.labels[index][1:-1])
 
     def get_all_labels(self, test_indexes):
 
         answers = []
-
         for i in range(0, len(test_indexes)):
             answers.append(self.get_class_name(self.labels[test_indexes[i]][1:-1]))
 
@@ -118,6 +114,7 @@ class data_set(Dataset):
         return labels_count
 
     def make_equal(self):
+        # Currently unused
         """
         Turns the dataset into a binary classifier, only allows 4522 NV images and 4522 MEL images,
         then removes everything else
@@ -167,6 +164,7 @@ class data_set(Dataset):
 
 
 class RandomCrop(object):
+    # Unused
     """
     Class used to randomly crop the image
     """
@@ -207,6 +205,7 @@ class RandomCrop(object):
 
 
 class RemoveBorders(object):
+    # Unused
 
     def __init__(self, image_size, tolerance=0):
         self.tol = tolerance

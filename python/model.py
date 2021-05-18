@@ -9,7 +9,8 @@ import BayesModel
 
 
 class OutputHook(list):
-    """ Hook to capture module outputs.
+    """
+    Hook to capture module outputs.
     """
     def __call__(self, module, input, output):
         self.append(output)
@@ -27,7 +28,6 @@ class Classifier(nn.Module):
         :param class_weights: the weights assigned to each class, used for BBB
         :param device: cpu or gpu, used for BBB
         :param hidden_size: size of first hidden layer
-        :param hidden_size2: size of second hidden layer
         :param dropout: Drop rate
         :param BBB: Whether or not to make layers Bayesian
         """
@@ -41,7 +41,7 @@ class Classifier(nn.Module):
         self.device = device
         self.relu = torch.nn.ReLU()
         
-        print(f"1: {hidden_size}")
+        print(f"Hidden layer size: {hidden_size}")
 
         with torch.no_grad():
 
@@ -51,28 +51,26 @@ class Classifier(nn.Module):
         # Initialises the classification head for generating predictions.
         if BBB:
             self.hidden_layer = BayesModel.BayesianLayer(encoder_size, hidden_size, device)
-
         else:
             self.hidden_layer = nn.Linear(encoder_size, hidden_size)
 
         self.bn1 = nn.BatchNorm1d(num_features=hidden_size)
-
         self.output_layer = nn.Linear(hidden_size, output_size)
 
-    def forward(self, input, drop_samples=1, sample=False, drop_rate=None, dropout=False):
+    def forward(self, input, samples=1, sample=False, drop_rate=None, dropout=False):
         """
         Extracts efficient Net output then passes it through our other layers
         :param input: input Image batch
-        :param drop_samples: number of forward passes to run
+        :param samples: number of forward passes to run
         :param sample: Whether or not to sample the ELBO in BBB
         :param drop_rate: drop rate for dropout
         :param dropout: whether or not to apply dropout
-        :return: The guess at
+        :return: the output of our network
         """
 
         output = self.extract_efficientNet(input)
         output = self.pass_through_layers(output, sample=sample,
-                                          drop_rate=drop_rate, drop_samples=drop_samples, dropout=dropout)
+                                          drop_rate=drop_rate, samples=samples, dropout=dropout)
         return output
 
     def extract_efficientNet(self, input):
@@ -82,13 +80,13 @@ class Classifier(nn.Module):
 
         return output
 
-    def pass_through_layers(self, input, sample=False, drop_rate=None, drop_samples=1, dropout=False):
+    def pass_through_layers(self, input, sample=False, drop_rate=None, samples=1, dropout=False):
         """
         Run the output of efficient net through our layers
         :param input: Input image batch
         :param sample: Whether we should calculate BBB loss
         :param drop_rate: drop rate for dropout
-        :param drop_samples: number of dropout samples to run
+        :param samples: number of samples to run
         :param dropout: whether or not to apply dropout
         :return: the networks classification batch
         """
@@ -97,16 +95,16 @@ class Classifier(nn.Module):
             drop_rate = self.drop_rate
 
         if self.BBB:
-            # Don't bother calculating KL Divergence if we're not training
+            # Don't bother calculating KL Divergence if we're not training or unless we ask
             if self.training or sample:
-                output = self.sample_elbo(input, samples=drop_samples)
+                output = self.sample_elbo(input, samples=samples)
                 return output
             else:
                 output = self.relu(self.bn1(self.hidden_layer(input)))
                 
                 return self.output_layer(output)
-        outputs = torch.zeros(drop_samples, input.size()[0], self.output_size).to(self.device)
-        for i in range(0, drop_samples):
+        outputs = torch.zeros(samples, input.size()[0], self.output_size).to(self.device)
+        for i in range(0, samples):
             if dropout:
                 input = TF.dropout(input, drop_rate)
 
@@ -137,7 +135,7 @@ class Classifier(nn.Module):
         :param input: Input image batch
         :param samples: number of samples to run across the Bayesian Layers
         :param n_classes: number of output classes
-        :return: the networks classification batch
+        :return: the network's classification batch
         """
         num_batches = 555
         batch_size = input.size()[0]

@@ -4,8 +4,6 @@ Deals with things like weight balancing, training and testing methods and
 calling other classes for plotting results of the network
 """
 
-
-
 # Global Variables
 EPOCHS = 50
 DEBUG = False # Toggle this to only run for 1% of the training data
@@ -15,7 +13,7 @@ SOFTMAX = True
 TRAIN_MC_DROPOUT = False
 SAMPLES = 3
 FORWARD_PASSES = 100
-BBB = False
+BBB = True
 LOAD = False
 LABELS = {0: 'MEL', 1: 'NV', 2: 'BCC', 3: 'AK', 4: 'BKL', 5: 'DF', 6: 'VASC', 7: 'SCC', 8: 'UNK'}
 SAVE_DIR = "saved_models"
@@ -568,6 +566,7 @@ for i in range(0, NUM_MODELS):
                                                                                                verbose=False)
 
     else:
+
         starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(SAVE_DIR, 0,
                                                                                            [], [],
                                                                                            [], [],

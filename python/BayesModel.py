@@ -1,3 +1,7 @@
+"""
+BayesMdoel.py: Handles the distribution over the weights for Bayes by Backprop. Credit to
+https://www.nitarshan.com/bayes-by-backprop/, which was used as a guide
+"""
 
 import math
 import torch
@@ -5,7 +9,9 @@ import torch.nn as nn
 from torch.nn import functional as TF
 
 class GaussianDistribution():
-
+    """
+    Makes use of the torch normal distributions and has the Reparameterizion trick built in
+    """
     def __init__(self, mu, rho, device):
         self.mu = mu
         self.rho = rho
@@ -17,18 +23,13 @@ class GaussianDistribution():
         return torch.log1p(torch.exp(self.rho))
 
     def sample_distribution(self):
-        """
-        Reparameterization trick
-        :return: Reparameterized Gaussian
-        """
         e = self.normal.sample(self.rho.size()).to(self.device)
         return self.mu + self.sigma * e
 
     def log_prob(self, input):
         """
-        Makes use of our scale and slab prioir
-        :param input:
-        :return:
+        Reparameterization trick
+        :return: Reparameterized Gaussian
         """
         return (-math.log(math.sqrt(2 * math.pi))
                 - torch.log(self.sigma)
@@ -44,12 +45,25 @@ class ScaleMixtureGaussian():
         self.gaussian2 = torch.distributions.Normal(torch.tensor(0).to(device), sigma2, validate_args=True)
 
     def log_prob(self, input):
+        """
+        Makes use of our scale and slab prioir
+        :param input: our input vector
+        :return: log probability of prior
+        """
         prob1 = torch.exp(self.gaussian1.log_prob(input))
         prob2 = torch.exp(self.gaussian2.log_prob(input))
         return (torch.log(self.pi * prob1 + (1 - self.pi) * prob2)).sum()
 
 class BayesianLayer(nn.Module):
+
     def __init__(self, in_features, out_features, device):
+        """
+        Initialise a bayesian layer
+        :param in_features: the number of incoming weights
+        :param out_features: the number of outgoing weights
+        :param device: device to put weights on
+
+        """
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
