@@ -1,6 +1,6 @@
 """
 BayesMdoel.py: Handles the distribution over the weights for Bayes by Backprop. Credit to
-https://www.nitarshan.com/bayes-by-backprop/, which was used as a guide
+https://www.nitarshan.com/bayes-by-backprop/
 """
 
 import math
