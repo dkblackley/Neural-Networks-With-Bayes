@@ -14,10 +14,201 @@ import data_plotting
 import testing
 import helper
 import model
+import constants
+
+composed_train = transforms.Compose([
+    transforms.RandomVerticalFlip(),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomRotation(35),
+    transforms.Resize(int(constants.IMAGE_SIZE * 1.5)),
+    transforms.CenterCrop(int(constants.IMAGE_SIZE * 1.25)),
+    transforms.RandomAffine(0, shear=5),
+    transforms.RandomResizedCrop(constants.IMAGE_SIZE, scale=(0.8, 1.0)),
+    transforms.ColorJitter(brightness=0.2, contrast=0.2, hue=0.2),
+    transforms.ToTensor(),
+    transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
+    transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
+    transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
+    transforms.RandomErasing(p=0.2, scale=(0.001, 0.005)),
+    # call helper.get_mean_and_std(data_set) to get mean and std
+    transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
+])
+
+composed_test = transforms.Compose([
+    transforms.Resize((constants.IMAGE_SIZE, constants.IMAGE_SIZE)),
+    transforms.ToTensor(),
+    # call helper.get_mean_and_std(data_set) to get mean and std
+    transforms.Normalize(mean=[0.6685, 0.5296, 0.5244], std=[0.2247, 0.2043, 0.2158])
+])
 
 train_data = data_loading.data_set("ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_train)
 test_data = data_loading.data_set("ISIC_2019_Training_Input", labels_path="Training_meta_data/ISIC_2019_Training_GroundTruth.csv",  transforms=composed_test)
 ISIC_data = data_loading.data_set("ISIC_2019_Test_Input",  transforms=composed_test)
+
+def setup():
+
+    if constants.ENABLE_GPU:
+        constants.DEVICE = torch.device("cuda")
+    else:
+        constants.DEVICE = torch.device("cpu")
+
+    weights = [3188, 8985, 2319, 602, 1862, 164, 170, 441]  # Distribution when using 70% of dataset
+
+    # Calculate the weights for the sampler function and loss functions
+    new_weights = []
+    sampler_weights = []
+    val_weights = []
+    k = 0
+    q = 1
+
+    for weight in weights:
+        new_weights.append(((sum(weights)) / weight) ** k)
+        sampler_weights.append(((sum(weights)) / weight) ** q)
+        val_weights.append(((sum(weights)) / weight) ** 1)
+
+    class_weights = torch.Tensor(new_weights) / new_weights[1]
+    sampler_weights = torch.Tensor(sampler_weights) / new_weights[1]
+    val_weights = torch.Tensor(val_weights) / new_weights[1]
+
+    val_weights = val_weights.to(constants.DEVICE)
+    class_weights = class_weights.to(constants.DEVICE)
+    sampler_weights = sampler_weights.to(constants.DEVICE)
+
+    network = model.Classifier(constants.IMAGE_SIZE, 8, class_weights, constants.DEVICE, dropout=0.5, BBB=constants.BBB)
+    network.to(constants.DEVICE)
+
+    if constants.BBB:
+        optim, scheduler = BBB_optim()
+
+    else:
+        optim = optimizer.SGD(network.parameters(), lr=0.0001, momentum=0.9, weight_decay=0.00001)
+        scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.02, step_size_up=(555 * 5),
+                                                    mode="triangular2")
+
+    return optim, scheduler
+
+    ROOT_SAVE_DIR = SAVE_DIR
+
+    if not os.path.exists(ROOT_SAVE_DIR):
+        os.mkdir(ROOT_SAVE_DIR)
+
+    if BBB:
+        SAVE_DIR += f"/BBB_Classifier_{i}/"
+    elif TRAIN_MC_DROPOUT:
+        SAVE_DIR += f"/MC_Classifier_{i}/"
+    else:
+        SAVE_DIR += f"/SM_Classifier_{i}/"
+
+    if LOAD:
+
+        network, optim, scheduler, starting_epoch, \
+            val_losses, train_losses, val_accuracies, \
+            train_accuracies = helper.load_net(SAVE_DIR, 8, constants.IMAGE_SIZE, constants.DEVICE, class_weights)
+        if TRAIN:
+            starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(SAVE_DIR,
+                                                                                               starting_epoch,
+                                                                                               val_losses,
+                                                                                               train_losses,
+                                                                                               val_accuracies,
+                                                                                               train_accuracies,
+                                                                                               verbose=False)
+
+    else:
+
+        starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = train(SAVE_DIR, 0,
+                                                                                           [], [],
+                                                                                           [], [],
+                                                                                           verbose=True)
+
+    network, optim, scheduler, starting_epoch, val_losses, train_losses, val_accuracies, train_accuracies = helper.load_net(
+        SAVE_DIR, 8, constants.IMAGE_SIZE, constants.DEVICE, class_weights)
+
+    if not os.path.exists(SAVE_DIR + "entropy/"):
+        os.mkdir(SAVE_DIR + "entropy/")
+        os.mkdir(SAVE_DIR + "variance/")
+        os.mkdir(SAVE_DIR + "costs/")
+
+        if constants.BBB:
+            if ISIC_pred:
+                predictions_BBB_entropy, predictions_BBB_var, costs_BBB = testing.predict(ISIC_set, SAVE_DIR, network,
+                                                                                          len(ISIC_data),
+                                                                                          constants.DEVICE, mc_dropout=True,
+                                                                                          forward_passes=FORWARD_PASSES,
+                                                                                          ISIC=True)
+                predictions_BBB_entropy.insert(0,
+                                               ["image", "MEL", "NV", "BCC", "AK", "BKL", "DF", "VASC", "SCC", "UNK"])
+            else:
+
+                predictions_BBB_entropy, predictions_BBB_var, costs_BBB = testing.predict(test_set, SAVE_DIR, network,
+                                                                                          test_size, constants.DEVICE,
+                                                                                          BBB=True,
+                                                                                          forward_passes=FORWARD_PASSES)
+            helper.write_rows(predictions_BBB_entropy, SAVE_DIR + "BBB_entropy_predictions.csv")
+            helper.write_rows(predictions_BBB_var, SAVE_DIR + "BBB_variance_predictions.csv")
+            helper.write_rows(costs_BBB, SAVE_DIR + "BBB_costs.csv")
+
+            costs_BBB = helper.read_rows(SAVE_DIR + "BBB_costs.csv")
+            predictions_BBB = helper.read_rows(SAVE_DIR + "BBB_entropy_predictions.csv")
+
+    if SOFTMAX:
+
+
+        if ISIC_pred:
+            predictions_softmax, entropy_soft, costs_softmax = testing.predict(ISIC_set, SAVE_DIR, network,
+                                                                               len(ISIC_data), constants.DEVICE,
+                                                                               softmax=True, ISIC=True)
+            predictions_softmax.insert(0, ["image", "MEL", "NV", "BCC", "AK", "BKL", "DF", "VASC", "SCC", "UNK"])
+        else:
+            predictions_softmax, entropy_soft, costs_softmax = testing.predict(test_set, SAVE_DIR, network,
+                                                                               test_size, constants.DEVICE,
+                                                                               softmax=True)
+        helper.write_rows(predictions_softmax, SAVE_DIR + "softmax_predictions.csv")
+        helper.write_rows(entropy_soft, SAVE_DIR + "softmax_entropy.csv")
+        helper.write_rows(costs_softmax, SAVE_DIR + "softmax_costs.csv")
+
+        predictions_softmax = helper.read_rows(SAVE_DIR + "softmax_predictions.csv")
+        costs_sr = helper.read_rows(SAVE_DIR + "softmax_costs.csv")
+
+        if ISIC_pred:
+            predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(ISIC_set, SAVE_DIR, network,
+                                                                                   len(ISIC_data),
+                                                                                   constants.DEVICE, mc_dropout=True,
+                                                                                   forward_passes=FORWARD_PASSES,
+                                                                                   ISIC=True)
+            predictions_mc_entropy.insert(0, ["image", "MEL", "NV", "BCC", "AK", "BKL", "DF", "VASC", "SCC", "UNK"])
+        else:
+            predictions_mc_entropy, predictions_mc_var, costs_mc = testing.predict(test_set, SAVE_DIR, network,
+                                                                                   test_size,
+                                                                                   constants.DEVICE, mc_dropout=True,
+                                                                                   forward_passes=FORWARD_PASSES)
+        helper.write_rows(predictions_mc_entropy, SAVE_DIR + "mc_entropy_predictions.csv")
+        helper.write_rows(predictions_mc_var, SAVE_DIR + "mc_variance_predictions.csv")
+        helper.write_rows(costs_mc, SAVE_DIR + "mc_costs.csv")
+
+        predictions_mc = helper.read_rows(SAVE_DIR + "mc_entropy_predictions.csv")
+        costs_mc = helper.read_rows(SAVE_DIR + "mc_costs.csv")
+
+
+def BBB_optim():
+    # Set the learning rate to be higher for the Bayesian Layer
+    BBB_weights = ['hidden_layer.weight_mu', 'hidden_layer.weight_rho', 'hidden_layer.bias_mu',
+                   'hidden_layer.bias_rho',
+                   'hidden_layer2.weight_mu', 'hidden_layer2.weight_rho', 'hidden_layer2.bias_mu',
+                   'hidden_layer2.bias_rho']
+
+    BBB_parameters = list(
+        map(lambda x: x[1], list(filter(lambda kv: kv[0] in BBB_weights, network.named_parameters()))))
+    base_parameters = list(
+        map(lambda x: x[1], list(filter(lambda kv: kv[0] not in BBB_weights, network.named_parameters()))))
+
+    optim = optimizer.SGD([
+        {'params': BBB_parameters},
+        {'params': base_parameters, 'lr': 0.0001}
+    ], lr=0.0001, momentum=0.9, weight_decay=0.00001)
+
+    scheduler = optimizer.lr_scheduler.CyclicLR(optim, base_lr=[0.0001, 0.0001], max_lr=[0.1, 0.02],
+                                                step_size_up=(555 * 5), mode="triangular2")
+
 
 def get_data_sets(plot=False):
     """
@@ -26,7 +217,7 @@ def get_data_sets(plot=False):
     :return: the DataLoader objects, ready to be called from for each set
     """
 
-    # 70% split to train set, use 2/3rds of the remaining data (20%) for the testing set
+    # 70% split to train set, use 2/3rds of the remaining data (20%) for the testing set and 10% for validation
     indices = list(range(len(train_data)))
     split_train = int(np.floor(0.7 * len(indices)))
     split_test = int(np.floor(0.66667 * (len(indices) - split_train)))
@@ -65,11 +256,13 @@ def get_data_sets(plot=False):
 
     return training_set, valid_set, testing_set, ISIC_set, len(test_idx), len(train_idx), len(valid_idx), test_idx
 
-train_set, val_set, test_set, ISIC_set, test_size, train_size, val_size, test_indexes = get_data_sets(plot=True)
+    train_set, val_set, test_set, ISIC_set, test_size, train_size, val_size, test_indexes = get_data_sets(plot=True)
 
-data_plot = data_plotting.DataPlotting(test_data, test_indexes, 12, 14)
-loss_function = nn.CrossEntropyLoss(weight=class_weights, reduction='mean')
-val_loss_function = nn.CrossEntropyLoss(weight=val_weights, reduction='mean')
+    data_plot = data_plotting.DataPlotting(test_data, test_indexes, 12, 14)
+    loss_function = nn.CrossEntropyLoss(weight=class_weights, reduction='mean')
+    val_loss_function = nn.CrossEntropyLoss(weight=val_weights, reduction='mean')
+
+
 def train(root_dir, current_epoch, val_losses, train_losses, val_accuracy, train_accuracy, verbose=False):
     """
     Trains the network, saving the model with the best loss and the best accuracy as it goes.

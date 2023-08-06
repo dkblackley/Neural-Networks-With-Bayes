@@ -4,7 +4,8 @@ File responsible for holding the model, uses efficientnet
 import torch
 import torch.nn as nn
 from torch.nn import functional as TF
-from efficientnet_pytorch import EfficientNet
+# from efficientnet_pytorch import EfficientNet
+import torchvision.models as models
 import BayesModel
 
 
@@ -32,7 +33,8 @@ class Classifier(nn.Module):
         :param BBB: Whether or not to make layers Bayesian
         """
         super(Classifier, self).__init__()
-        self.model = EfficientNet.from_pretrained("efficientnet-b0")
+        # self.model = models.from_pretrained("efficientnet-b0")
+        self.model = models.resnet50(pretrained=True)
         self.drop_rate = dropout
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.output_size = output_size

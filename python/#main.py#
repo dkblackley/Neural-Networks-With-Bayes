@@ -16,6 +16,7 @@ import training
 import helper
 import model
 import constants
+from data_plotting import data_plot
 
 if torch.cuda.is_available():
     constants.ENABLE_GPU = True
